@@ -1,0 +1,370 @@
+<script type="text/javascript" src="/apps/1.26/sdk.js"></script>
+<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+
+<script type="text/template" id="noTaskUserStoryTemplate">
+    <tr class="x4-component row-header x4-component-default x4-border-box">
+        <td class="row-header-cell" colspan="3">
+            <div class="row-header-title">
+                <span class="formatted-id-template">
+                    <a class="formatted-id-link _NoTaskUserStory_Link" href="{X}">
+                        <span class="artifact-icon icon-story"></span>
+                        <span class="_NotaskUserStory_FormattedID">{X}</span>
+                    </a>
+                </span>:&nbsp;
+                <span class="_NoTaskUserStory_Name">{X}</span>
+                <span style="margin-left: 40px">
+                    <a target="_blank" href="#" class="_NotaskUserStory_AddNewTask">
+                        <b>[No tasks defined - Click to add]</b>
+                    </a>
+                </span>
+            </div>
+            <div class="icon-collapse-row expand-collapse"></div>
+        </td>
+    </tr>
+</script>
+
+<script>
+
+    var RALLY = window.parent.RALLY;
+    var Ext = window.parent.Ext4 || window.parent.Ext;
+
+    Date.prototype.addDays = function (days) {
+        var date = new Date(this.valueOf());
+        date.setDate(date.getDate() + days);
+        return date;
+    };
+    Date.prototype.businessDaysTill = function (endDate) {
+        var startDate = new Date(this.valueOf());
+        var count = 0;
+        var curDate = startDate;
+        while (curDate <= endDate) {
+            var dayOfWeek = curDate.getDay();
+            var isWeekend = (dayOfWeek == 6) || (dayOfWeek == 0);
+            if (!isWeekend)
+                count++;
+            curDate = curDate.addDays(1);
+        }
+        return count;
+    };
+
+    var app = new (function () {
+
+        this.isLoading = false,
+        this.curIterationId = null,
+        this.templatesLoaded = false,
+        this.$noTaskUserStoryTemplate = null,
+
+        this.onDashboardIterationChanged = function (iteration) {
+            var $thisApp = this;
+
+            if (!$thisApp.templatesLoaded) {
+                $thisApp._LoadTemplates();
+            }
+
+            $thisApp.curIterationId = iteration.ObjectID;
+
+            $thisApp._setTitle(iteration.Name);
+            $thisApp._setIterationDetails(iteration.ObjectID);
+            setTimeout(function () {
+                $thisApp._checkIfAllUserStoriesHaveTasks(iteration.ObjectID);
+                setTimeout(function () {
+                    $thisApp._updateStories(iteration.Name);
+                    isLoading = false;
+                }, 1500);
+            }, 1000);
+        },
+
+        this._LoadTemplates = function () {
+            var $thisApp = this;
+
+            if ($("#noTaskUserStoryTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$noTaskUserStoryTemplate = $($("#noTaskUserStoryTemplate").html());
+        },
+
+        this._setTitle = function (iterationName) {
+            var $thisApp = this;
+
+            $(window.parent.document)
+                .find(".title")
+                .css("font-size", "24pt")
+                .html(RALLY.activePage.context.project.Name + " - " + (iterationName || "Unscheduled"));
+        },
+
+        this._ShowUnscheduledIterationsDetails = function () {
+            var $thisApp = this;
+
+            var $title = $(window.parent.document).find(".title");
+
+            if (!$title) return;
+            if ($title.length == 0) return;
+
+            var $details = null;
+            if ($title.parent().parent().find(".moreDetails").length == 0) {
+                $details = $("<div class='moreDetails' style='padding: 5px;'>Loading...</div>").insertBefore($title.parent());
+            } else {
+                $details = $title.parent().parent().find(".moreDetails");
+            }
+
+            if (!$details) return;
+
+            $details.empty().append("<span style='padding: 5px'>Iteration: <b>Unscheduled.</b>");
+        },
+
+        this._ShowScheduledIterationDetails = function (result) {
+            var $thisApp = this;
+
+            var $title = $(window.parent.document).find(".title");
+            if (!$title) return;
+            if ($title.length == 0) return;
+
+            var details = null;
+            if ($title.parent().parent().find(".moreDetails").length == 0) {
+                $details = $("<div class='moreDetails' style='padding: 5px;'>Loading...</div>").insertBefore($title.parent());
+            } else {
+                $details = $title.parent().parent().find(".moreDetails");
+            }
+
+            if (!$details) return;
+
+            $details.empty();
+            $details.attr("onclick", "window.open('https://rally1.rallydev.com/#/timeboxes');");
+            
+            if (result.Theme) {
+                $details.append("<span style='padding: 5px'>Theme: <b>" + result.Theme + "</b>");
+            }
+
+            if (result.State) {
+                $details.append("<span style='padding: 5px'>State: <b>" + result.State + "</b>");
+            }
+
+            if (result.StartDate && result.EndDate) {
+                if (new Date(result.StartDate) < new Date() && new Date(result.EndDate) > new Date()) {
+                    $details.append("<span style='padding: 5px'>Iteration: <b>In progresults - " + new Date().businessDaysTill(new Date(result.EndDate)) + " Days remaining.</b>");
+                } else if (new Date(result.EndDate) < new Date()) {
+                    $details.append("<span style='padding: 5px'>Iteration: <b>Completed.</b>");
+                } else if (new Date(result.StartDate) > new Date()) {
+                    $details.append("<span style='padding: 5px'>Iteration: <b>Future date.</b>");
+                }
+            }
+        },
+
+        this._setIterationDetails = function (iterationId) {
+            var $thisApp = this;
+
+            if (!iterationId) {
+                $thisApp._ShowUnscheduledIterationsDetails();
+
+            } else {
+
+                var url = "https://rally1.rallydev.com/slm/webservice/v2.x/Iteration?fetch=true&includePermissions=true&query=(ObjectId = \"" + iterationId + "\")";
+
+                $.getJSON(url, function (data) {
+                    if (data && data.QueryResult && data.QueryResult.TotalResultCount == 1) {
+                        var res = data.QueryResult.Results[0];
+                        $thisApp._ShowScheduledIterationDetails(res);
+                    }
+                });
+
+            }
+        },
+
+        this._updateStories = function (iterationName) {
+            var $thisApp = this;
+
+            $(window.parent.document).find(".x-panel.x-portlet").each(function (i, v) {
+                if ($(v).find("div.customboard").length > 0 && $(v).find(".fixed-header-card-board-body-container").length > 0) {
+                    $(v).find(".row-header-cell").each(function (i, v) {
+                        $thisApp._updateStoryDetails($(v));
+                    });
+                }
+            });
+        },
+
+        this._updateStoryDetails = function ($rowheader) {
+            var $thisApp = this;
+
+            if ($rowheader.find(".formatted-id-link").length == 0) {
+                return;
+            }
+
+            var USid = $rowheader.find(".formatted-id-link").text();
+            if (!USid) {
+                return;
+            }
+
+            var link = $rowheader.find(".formatted-id-link").attr("href");
+
+            var replacer = null;
+            if (link && link.indexOf("/userstory/") > 0) { replacer = "/userstory/"; }
+            else if (link && link.indexOf("/defect/") > 0) { replacer = "/defect/"; }
+            else { return; }
+
+            var objectId = link.substring(link.indexOf(replacer) + replacer.length);
+
+            $rowheader.find(".userstorydetails").remove();
+            $rowheader.append("<div class='userstorydetails' style='float: left; width: 100%; height: 12pt;'>Loading details for <b>" + USid + "</b>...</div>");
+
+            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/artifact?fetch=true&query=(ObjectId = \"" + objectId + "\")";
+
+            $.getJSON(url, function (data) {
+                var details = null;
+                if (data.QueryResult.TotalResultCount == 1) {
+                    var result = data.QueryResult.Results[0];
+                    details = $rowheader.find(".userstorydetails");
+                    details.fadeOut("fast").empty().css("padding", "5px");
+
+                    if (result.Feature && result.Feature._refObjectName) {
+                        details.append("<span style='padding: 5px'>Feature: <b>" + result.Feature._refObjectName + "</b>");
+                    }
+
+                    details.append("<span style='padding: 5px;'>Passing Tests: <b>" + result.PassingTestCaseCount + "/" + result.TestCaseCount + "</b></span>");
+                    if (result.DefectStatus && result.Defects.Count) {
+                        var defectstatus;
+                        switch (result.DefectStatus) {
+                            case "ALL_CLOSED": defectstatus = "All Closed";
+                            case "NONE_CLOSED": defectstatus = "None";
+                            default: defectstatus = result.DefectStatus;
+                        }
+                        details.append("<span style='padding: 5px;'>Defect Status: <b>" + defectstatus + " (" + result.Defects.Count + ")</b></span>");
+                    }
+
+                    details.append("<span style='padding: 5px;'>Status: <b>" + (result.c_StoryboardDigitalWagering || result.ScheduleState) + "</b></span>");
+
+                    if (result.Blocked) {
+                        $rowheader.css("background-color", "#b81b10");
+                        details.append("<span style='padding: 5px'>Blocked Reason: <b>" + result.BlockedReason + "</b></span>");
+                    } else if (result.Ready) {
+                        $rowheader.css("background-color", "#8dc63f");
+                    } else {
+                        $rowheader.css("background-color", "");
+                    }
+
+                    if (result.Owner && result.Owner._refObjectName) {
+                        details.append("<span style='padding: 5px;'>Owner: <b>" + result.Owner._refObjectName + "</b></span>");
+                    }
+
+                    if (result.Tags && result.Tags.Count > 0) {
+                        details.append("<span style='padding: 5px'>Tags: <b>");
+                        result.Tags._tagsNameArray.forEach(function (tag) {
+                            details.append(tag.Name + " ");
+                        });
+                        details.append("</b></span>");
+                    }
+
+                } else {
+                    details = $rowheader.find(".userstorydetails");
+                    details.empty().css("padding", "5px");
+                    details.append("<span style='padding: 5px;'>Found <b>" + data.QueryResult.TotalResultCount + "</b> items.</span>");
+                }
+
+                if (details) {
+                    details.fadeIn("fast");
+                }
+            });
+        }
+
+        this._findBoardByTitle = function ($panelportlet) {
+            var $thisApp = this;
+
+            var boardTitle = $panelportlet.find(".x-panel-header-text").text();
+
+            for (var i = 0; i < RALLY.activePage.dashboardPanels.length; i++) {
+                var board = RALLY.activePage.dashboardPanels[i];
+                if (board.appScopedSettings.title == boardTitle) {
+                    return board;
+                }
+            }
+
+            return null;
+        },
+
+        this._getQueryFromBoard = function (board) {
+            var $thisApp = this;
+
+            if (!board) {
+                return null;
+            }
+
+            var searchMask = "WorkProduct.";
+            var regEx = new RegExp(searchMask, "ig");
+            var replaceMask = "";
+
+            return board.appScopedSettings.query.replace(regEx, replaceMask);
+        },
+
+        this._checkIfAllUserStoriesHaveTasks = function (iterationId) {
+            var $thisApp = this;
+
+            setTimeout(function () {
+                $(window.parent.document).find(".x-panel.x-portlet").each(function (i, v) {
+
+                    var $storyTable = $(v).find(".fixed-header-card-board-body-container > table > tbody");
+                    if ($storyTable.length == 0) {
+                        return;
+                    }
+
+                    var board = $thisApp._findBoardByTitle($(v));
+                    var query = $thisApp._getQueryFromBoard(board);
+
+                    var url;
+                    if (query) {
+                        url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((Iteration.ObjectId%20%3D%20%22" + iterationId + "%22) And " + query + ")";
+                    } else {
+                        url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+                    }
+
+                    $.getJSON(url, function (data) {
+                        if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
+                            for (var i = 0; i < data.QueryResult.TotalResultCount; i++) {
+                                var res = data.QueryResult.Results[i];
+
+                                if ($storyTable.find(".formatted-id-link:contains('" + res.FormattedID + "')").length > 0) {
+                                    // already exists in table
+                                    continue;
+                                }
+
+                                $thisApp.__createNoTaskStoryForStoryResult($storyTable, res);
+                            }
+                        }
+                    });
+                });
+            }, 50);
+        },
+
+        this._createNoTaskStoryForStoryResult = function ($storyTable, res) {
+
+            var $story;
+            if ($storyTable.find("#NoTaskUserStory" + res.ObjectID).length == 1) {
+                $story = $($storyTable.find("#NoTaskUserStory" + res.ObjectID)[0]);
+            } else {
+                $story = $thisApp.$noTaskUserStoryTemplate.clone();
+                $($story.find("tr")[0]).attr("id", "#NoTaskUserStory" + res.ObjectID);
+            }
+
+            $story.find("._NoTaskUserStory_Name").html(res.Name);
+            $story.find("._NoTaskUserStory_Link").attr("href", "#/" + RALLY.context.projectOid + "d/detail/userstory/" + res.ObjectID);
+            $story.find("._NotaskUserStory_AddNewTask").attr("href", "#/" + RALLY.context.projectOid + "d/detail/task/new?typeDef=25364774067&rankTo=BOTTOM" + "&Iteration=%2Fiteration%2F" + $thisApp.curIterationId + "&Project=%2Fproject%2F" + RALLY.context.projectOid + "&rankScope=%2Fiteration%2F" + $thisApp.curIterationId + "&&WorkProduct=%2Fhierarchicalrequirement%2F" + res.ObjectID);
+            $story.find("._NoTaskUserStory_FormattedID").html(res.FormattedID);
+            $storyTable.append($story);
+        }
+    })();
+
+    function onDashboardPageTimeboxFilterChanged(args) {
+        if (args.iteration) {
+            var iteration = args.iteration;
+            if (app) {
+                app.onDashboardIterationChanged(iteration);;
+            }
+        }
+    }
+
+    rally.addOnLoad(function () {
+        $("#appHeader").remove();
+        if (app) {
+            app.onDashboardIterationChanged(RALLY.activePage.context.timeboxFilter.iteration);
+        }
+    });
+
+</script>
