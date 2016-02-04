@@ -1,0 +1,1149 @@
+<script src="/apps/1.26/sdk.js"></script>
+<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
+
+<style>
+    .btn {
+        background: rgb(0, 169, 224);
+        background-image: -webkit-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
+        background-image: -moz-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
+        background-image: -ms-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
+        background-image: -o-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
+        background-image: linear-gradient(to bottom, rgb(0, 169, 224), rgb(0, 169, 224));
+        -webkit-border-radius: 3;
+        -moz-border-radius: 3;
+        border-radius: 3px;
+        color: #ffffff;
+        padding: 5px 10px 5px 10px;
+        text-decoration: none;
+        margin-right: 10px;
+    }
+
+        .btn:hover {
+            background: #3cb0fd;
+            background-image: -webkit-linear-gradient(top, #3cb0fd, #3498db);
+            background-image: -moz-linear-gradient(top, #3cb0fd, #3498db);
+            background-image: -ms-linear-gradient(top, #3cb0fd, #3498db);
+            background-image: -o-linear-gradient(top, #3cb0fd, #3498db);
+            background-image: linear-gradient(to bottom, #3cb0fd, #3498db);
+            text-decoration: none;
+        }
+
+        .btn:link {
+            color: white;
+        }
+
+        .btn:visited {
+            color: white;
+        }
+
+    .div-table {
+        display: table;
+        background-color: #eee;
+        border: 1px solid #666666;
+        border-spacing: 5px; /*cellspacing:poor IE support for  this*/
+    }
+
+    .div-table-row {
+        display: table-row;
+        width: 100%;
+        clear: both;
+    }
+
+    .div-table-col {
+        float: left; /*fix for  buggy browsers*/
+        display: table-column;
+        background-color: #ccc;
+        width: 9%;
+        min-height: 100px;
+        display: inline-block;
+        padding: 0px;
+        border: 1px solid #aaaaaa;
+    }
+
+    .div-table-col-tally {
+        float: left; /*fix for  buggy browsers*/
+        display: table-column;
+        background-color: #ccc;
+        width: 9%;
+        min-height: 30px;
+        display: inline-block;
+        padding: 0px;
+        margin-left: 1px;
+        font: 11px arial,tahoma,helvetica,sans-serif;
+    }
+
+        .div-table-col-tally.weekend {
+            display: inline;
+            visibility: hidden;
+            width: 20px !important;
+            text-overflow: clip;
+            text-indent: 100%;
+            overflow: hidden;
+        }
+
+        .div-table-col-tally.highlight > * {
+            visibility: hidden;
+            display: inline;
+        }
+
+        .div-table-col-tally > * > .data {
+            width: 100%;
+        }
+
+    #lunch > .div-table-col {
+        min-height: 50px;
+    }
+
+    .col {
+        width: 9%;
+        min-width: 20px;
+    }
+
+    .div-table-col-header {
+        float: left; /*fix for  buggy browsers*/
+        display: table-column;
+        background-color: #ccc;
+        height: 22px;
+        padding: 0px;
+        border: 1px solid #aaaaaa;
+    }
+
+    .div-table-col-holiday {
+        float: left; /*fix for  buggy browsers*/
+        display: table-column;
+        width: 20px;
+        background-color: red;
+        min-height: 300px;
+        display: inline-block;
+        padding: 0px;
+        border: 1px solid #aaaaaa;
+    }
+
+    .div-table-col-holiday-header {
+        float: left; /*fix for  buggy browsers*/
+        display: table-column;
+        width: 20px;
+        background-color: red;
+        height: 22px;
+        padding: 0px;
+        border: 1px solid #aaaaaa;
+    }
+
+    .weekend {
+        width: 20px !important;
+        margin-right: 3px;
+    }
+
+        .weekend > textarea {
+            display: none;
+        }
+
+    .div-table-col-abs {
+        float: left; /*fix for  buggy browsers*/
+        display: table-column;
+        height: 50px;
+    }
+
+    .div-table-col-header-abs {
+        float: left; /*fix for  buggy browsers*/
+        display: table-column;
+        height: 50px;
+        overflow: hidden;
+        margin-left: 1px;
+    }
+
+    .highlight {
+        background: red;
+        width: 20px;
+        overflow: hidden;
+        color: transparent;
+    }
+
+    .USNumber {
+        font-weight: bold;
+    }
+
+    .Name {
+        font-weight: bold;
+    }
+
+    .TaskType {
+        text-align: right !important;
+    }
+
+        .TaskType > button {
+            font-size: 6pt;
+            padding: 2px;
+            margin: 0px;
+        }
+
+    .Estimate {
+        text-align: right;
+    }
+
+    .whoDoesIt {
+    }
+
+    .Story {
+    }
+
+    .customInput {
+        width: 100%;
+    }
+
+    textarea {
+        width: 100%;
+        height: 95%;
+        box-sizing: border-box;
+    }
+
+    .dragger {
+        border: 1px solid black;
+        cursor: move;
+        margin-top: 3px;
+        margin-bottom: 3px;
+    }
+
+        .dragger > * > span {
+            vertical-align: top;
+            text-align: left;
+        }
+
+    .notInIterationAnymore {
+        border: 3px dashed red;
+    }
+
+    .tallyName {
+        text-align: left;
+        float: left;
+        margin: 2px;
+    }
+
+    .tallyEst {
+        text-align: right;
+        font-weight: bold;
+        float: right;
+        margin: 2px;
+    }
+
+    ul.userstoryfilter {
+        padding-left: 15px;
+        margin-left: 3px;
+    }
+
+    li.listitemstory:hover {
+        cursor: pointer;
+    }
+
+    .filtered {
+        font-weight: bolder;
+    }
+
+    .cardboard {
+        margin-bottom: 0;
+        border: 1px solid #C6C6C6;
+        background-color: #F4F7F8;
+        border-collapse: collapse;
+        table-layout: fixed;
+        width: 100%;
+    }
+
+    .cardheader {
+        background-color: #B2E3B6;
+    }
+
+    .cardboard.cardheader {
+        border-bottom: 1px solid #C6C6C6;
+    }
+
+    .parentStory {
+        border-top: 1px solid #C6C6C6;
+    }
+
+    .cardWhoDoesIt {
+    }
+
+    .cardOwner {
+        text-align: right;
+        width: 20px !important;
+    }
+</style>
+
+<body style="margin: 0px; margin-top: 5px; height: 100%;">
+    <div style="float: right; text-align: right; padding-bottom: 5px; width: 100%; margin: 5px;">
+        <div style="float: left; text-align: left; margin-left: 20px; width: 50%;" id="iterationMessages">
+            &nbsp;
+        </div>
+
+        <div style="float: right; text-align: right; width: 100%;">
+            <span id="Messages" style="display: none;">Loading...</span>
+            <button onclick="javascript: app.Refresh();" class="btn">
+                Refresh
+            </button>
+            <button onclick="javascript: app.SaveIt();" class="btn">
+                Save
+            </button>
+            <button onclick="javascript: app.Reset();" class="btn">
+                Reset
+            </button>
+            <button onclick="javascript: app.PrintIt();" class="btn">
+                Print
+            </button>
+        </div>
+    </div>
+
+    <div style="width: 100%;">
+        <div style="width: 90%; float: left; margin:0 auto;">
+            <div id="tblCalender" style="width: 100%;" class="div-table">
+                Loading...
+            </div>
+        </div>
+        <div id="userStoryFilter" style="width: 10%; float: right; height: 100%;">
+            <div style="border-bottom: 1px solid black; margin: 3px;">Iteration Story Filter</div>
+            <ul class="userstoryfilter"></ul>
+        </div>
+    </div>
+</body>
+
+<script type="text/template" id="calendarTemplate">
+    <!-- Calendar Template -->
+    <div class="div-table-row">Absentees/Notes</div>
+    <div id="absentees" class="div-table-row">&nbsp;</div>
+    <div class="div-table-row">Click on the day header to mark as a holiday</div>
+    <div id="holidays" data-name="holidays" class="div-table-row">&nbsp;</div>
+    <div id="morning" data-name="morning" class="div-table-row">&nbsp;</div>
+    <div id="lunch" data-name="lunch" class="div-table-row">&nbsp;</div>
+    <div id="afternoon" data-name="afternoon" class="div-table-row">&nbsp;</div>
+    <div id="tally" data-name="tally" class="div-table-row"></div>
+</script>
+
+<script type="text/template" id="absenteesTemplate">
+    <!-- Absentees Template -->
+    <div class='div-table-col-header-abs col'>
+        <textarea>
+            &nbsp;
+        </textarea>
+    </div>
+</script>
+
+<script type="text/template" id="holidaysTemplate">
+    <!-- Holidays Template -->
+    <div class='div-table-col-header col' title='Click to mark as a holiday'>
+        &nbsp;
+    </div>
+</script>
+
+<script type="text/template" id="tallyTableTemplate">
+    <!-- Tally Table Template -->
+    <div class='div-table-col-tally col' title='Task estimate per team member per day'>
+        <div style="width: 100%; min-height: 12px; border-bottom: 1px solid #666666; padding-bottom: 4px;">
+            <span style="float: left;  margin: 2px;">
+                Name
+            </span>
+            <span style="float: right; margin: 2px;">
+                Total
+            </span>
+        </div>
+        <div class="data">
+            &nbsp;
+        </div>
+    </div>
+</script>
+
+<script type="text/template" id="tallyTemplate">
+    <!-- Tally Template -->
+    <div style="width: 100%; min-height: 12px;">
+        <span class="tallyName">&nbsp;</span>
+        <span class="tallyEst">&nbsp;</span>
+    </div>
+</script>
+
+<script type="text/template" id="workTemplate">
+    <!-- Work Template -->
+    <div class='div-table-col col' ondrop='drop(event)' ondragover='allowDrop(event)'>
+        &nbsp;
+    </div>
+</script>
+
+<script type="text/template" id="taskTemplate">
+    <!-- Task Template -->
+    <div class='dragger cardboard' draggable="true" ondragstart="drag(event)">
+        <table class="cardboard">
+            <thead class="cardheader">
+                <tr>
+                    <td class="USNumber" colspan="2">
+                        &nbsp;
+                    </td>
+                    <td class="TaskType">
+                        <button onclick="removeParentTable(this)" title="Remove from plan. Refreshing will bring it back.">X</button>
+                    </td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="cardWhoDoesIt">
+                    <td>
+                        Est:
+                        <span class="Estimate">
+                            &nbsp;
+                        </span>
+                    </td>
+                    <td class="whoDoesIt">
+                        &nbsp;
+                    </td>
+                    <td class="cardOwner">
+                        <img data-url="https://rally1.rallydev.com/slm/profile/viewThumbnailImage.sp?tSize=20&amp;uid=" />
+                    </td>
+                </tr>
+                <tr>
+                    <td class="Name" colspan="3">
+                        &nbsp;
+                    </td>
+                </tr>
+                <tr class="parentStory">
+                    <td colspan="3">
+                        Parent:</br>
+                        <span class="Story">
+                            &nbsp;
+                        </span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</script>
+
+<script type="text/template" id="storyTemplate">
+    <li class="listitemstory">
+        &nbsp;
+    </li>
+</script>
+
+<script>
+
+    var RALLY = window.parent.RALLY;
+    var Ext = window.parent.Ext4 || window.parent.Ext;
+
+    var weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    Date.prototype.addDays = function (days) {
+        var date = new Date(this.valueOf());
+        date.setDate(date.getDate() + days);
+        return date;
+    };
+    Date.prototype.businessDaysTill = function (endDate) {
+        var startDate = new Date(this.valueOf());
+        var count = 0;
+        var curDate = startDate;
+        while (curDate <= endDate) {
+            var dayOfWeek = curDate.getDay();
+            var isWeekend = (dayOfWeek == 6) || (dayOfWeek == 0);
+            if (!isWeekend)
+                count++;
+            curDate = curDate.addDays(1);
+        }
+        return count;
+    };
+    Date.prototype.DaysDifferenceBetween = function (second) {
+        var first = new Date(this.valueOf());
+        return Math.round((second - first) / (1000 * 60 * 60 * 24));
+    }
+    Date.prototype.IsWeekend = function () {
+        var myDate = new Date(this.valueOf());
+        var dayOfWeek = myDate.getDay();
+        return (dayOfWeek == 6) || (dayOfWeek == 0); // sat or sun
+    }
+
+    String.prototype.format = function () {
+        var theString = arguments[0];
+        for (var i = 1; i < arguments.length; i++) {
+            var regEx = new RegExp("\\{" + (i - 1) + "\\}", "gm");
+            theString = theString.replace(regEx, arguments[i]);
+        }
+        return theString;
+    }
+
+    $.fn.classes = function (callback) {
+        var classes = [];
+        $.each(this, function (i, v) {
+            var splitClassName = v.className.split(/\s+/);
+            for (var j in splitClassName) {
+                var className = splitClassName[j];
+                if (-1 === classes.indexOf(className)) {
+                    classes.push(className);
+                }
+            }
+        });
+        if ('function' === typeof callback) {
+            for (var i in classes) {
+                callback(classes[i]);
+            }
+        }
+        return $(classes);
+    };
+
+    $.fn.extend({
+        refresh: function () {
+            var $parent = this.end();
+            if ($parent.length == 0) {
+                if (this.parent()) { $parent = this.parent(); }
+                else { $parent = $("document"); }
+            }
+            var selector = this.selector.substring($parent.selector.length).trim();
+            return $parent.find(selector);
+        }
+    });
+
+    function allowDrop(ev) {
+        ev.preventDefault();
+    }
+
+    function drag(ev) {
+        ev.dataTransfer.setData("text", ev.target.id);
+        dragstop = true;
+        try {
+            if (ev.originalEvent.clientY < 150) {
+                dragstop = false;
+                scroll(-1)
+            }
+            if (ev.originalEvent.clientY > ($(window).height() - 150)) {
+                dragstop = false;
+                scroll(1)
+            }
+        } catch (e) {
+            dragstop = false;
+        }
+    }
+
+    function scroll(step) {
+        var scrollY = $(window.parent.window).scrollTop();
+        $(window.parent.window).scrollTop(scrollY + step);
+        if (!stop) {
+            setTimeout(function () { scroll(step) }, 20);
+        }
+    }
+
+    function drop(ev) {
+        ev.preventDefault();
+        var data = ev.dataTransfer.getData("text");
+        $(ev.target).closest(".div-table-col").append($(document.getElementById(data)));
+        if (app) {
+            app.afterDrop(ev);
+        }
+    }
+
+    removeParentTable = function (el) {
+        $(el).closest('.dragger').remove()
+    }
+
+    var app = new (function () {
+
+        this.isLoading = false,
+        this.currentIterationId = "",
+        this.templatesLoaded = false,
+        this.lastFiler = null,
+
+        this.$absenteesTemplate = null,
+        this.$holidaysTemplate = null,
+        this.$workTemplate = null,
+        this.$calendarTemplate = null,
+        this.$taskTemplate = null,
+        this.$tallyTemplate = null,
+        this.$tallyTableTemplate = null,
+        this.$storyTemplate = null,
+
+        this.lastResize = null,
+        this.interval = null,
+
+        this.onDashboardIterationChanged = function (iteration) {
+            var $thisApp = this;
+
+            if (!$thisApp.templatesLoaded) {
+                $thisApp._LoadTemplates();
+            }
+
+            $thisApp._loadIterationDetails(RALLY.activePage.context.timeboxFilter.iteration);
+
+            $thisApp.ResizeColumnWidths();
+        },
+
+        this.afterDrop = function (event) {
+            var $thisApp = this;
+
+            $thisApp.lastResize = null;
+            $thisApp.CalculateTallies();
+        },
+
+        this._resetResizeInterval =  function() { 
+            var $thisApp = this;
+
+            if ($thisApp.interval){
+                clearInterval($thisApp.interval);
+            }
+
+            $thisApp.interval = setInterval(function () {
+                $thisApp.ResizeColumnWidths();
+            }, 60 * 1000);
+
+            $thisApp.lastResize = new Date();
+        },
+
+        this._updateRallyIteration = function (input, successfunc) {
+            var $thisApp = this;
+
+            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/iteration/";
+
+            $.getJSON("https://rally1.rallydev.com/slm/webservice/v2.0/security/authorize", function (security) {
+                $.ajax({
+                    type: 'POST',
+                    url: url + $thisApp.currentIterationId + "?key=" + security.OperationResult.SecurityToken,
+                    data: JSON.stringify(input),
+                    success: function (data) {
+                        if (successfunc) {
+                            successfunc.call(data);
+                        }
+                    },
+                    contentType: "application/json",
+                    dataType: 'json'
+                });
+            });
+        },
+
+        this.Reset = function () {
+            var $thisApp = this;
+
+            $thisApp._updateRallyIteration({ "Iteration": { "c_PlanDetails": null } }, function (data) {
+                $("#Messages").text("Reset iteration information completed").fadeIn().delay(1000).fadeOut("slow");
+
+                if ($thisApp.currentIterationId) {
+                    $thisApp._setIterationDetails($thisApp.currentIterationId);
+                }
+            });
+        },
+
+        this.Refresh = function () {
+            var $thisApp = this;
+
+            if ($thisApp.currentIterationId) {
+                $("#Messages").text("Refreshing").fadeIn().delay(1000).fadeOut("slow");
+                $thisApp._setIterationDetails($thisApp.currentIterationId);
+            }
+
+            var $stories = $("#userStoryFilter > .userstoryfilter");
+            $stories.empty();
+        },
+
+        this.SaveIt = function () {
+            var $thisApp = this;
+
+            $("#tblCalender").find('textarea').each(function () {
+                $(this).attr('value', $(this).val());
+                $(this).append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
+            });
+
+            $("#tblCalender").find('.dragger, .div-table-row').each(function () {
+                $(this).addClass('id' + $(this).attr('id'));
+            });
+
+            $thisApp._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").clone(true, true).html() } }, function (data) {
+                $("#Messages").text("Saved iteration information").fadeIn().delay(1000).fadeOut("slow");
+
+                if ($thisApp.currentIterationId) {
+                    $thisApp._retrievePlan($thisApp.currentIterationId);
+                }
+            });
+        },
+
+        this.PrintIt = function () {
+            var $thisApp = this;
+
+            var data = $("#tblCalender").html();
+            var mywindow = window.open('', 'my div', 'height=400,width=600');
+            mywindow.document.write('<html><head><title>Iteration Plan</title>');
+            $(document).find("style").each(function (i, v) {
+                mywindow.document.write("<style>" + $(v).html() + "</style>");
+            });
+            mywindow.document.write('</head><body >');
+            mywindow.document.write(data);
+            mywindow.document.write('</body></html>');
+            mywindow.document.close(); // necessary for IE >= 10
+            mywindow.focus(); // necessary for IE >= 10
+            mywindow.print();
+            mywindow.close();
+            return true;
+        },
+
+        this._checkIfAllUserStoriesHaveTasks = function (iterationId) {
+            var $thisApp = this;
+
+            setTimeout(function () {
+
+                var url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=20&query=((ScheduleState%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+
+                var $messages = $("#iterationMessages");
+                var $stories = $("#userStoryFilter > .userstoryfilter");
+
+                $.getJSON(url, function (data) {
+                    if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
+
+                        var total = 0;
+                        for (var i = 0; i < data.QueryResult.TotalResultCount; i++) {
+                            var res = data.QueryResult.Results[i];
+                            if (res.Tasks.Count == 0) {
+                                total++;
+                            }
+
+                            var $story = $thisApp.$storyTemplate.clone();
+                            $story.html(res.FormattedID + "-" + res.Name);
+                            $story.attr("data-user-story-id", res.ObjectID);
+                            $story.attr("onclick", "javascript:app.FilterTasksByUserStory('" + res.ObjectID + "')");
+                            $stories.append($story);
+                        }
+                        if (total == 1) {
+                            $messages.html("<a target='_top' href='https://rally1.rallydev.com/#/teamplan'>There is " + total + " story included in the iteration that does not have associated tasks.</a>");
+                        } else if (total > 1) {
+                            $messages.html("<a target='_top' href='https://rally1.rallydev.com/#/teamplan'>There are " + total + " stories included in the iteration that do not have associated tasks.</a>");
+                        }
+                    }
+                });
+
+            }, 50);
+        },
+
+        this.FilterTasksByUserStory = function (userStoryID) {
+            var $thisApp = this;
+
+            if ($thisApp.lastFiler == userStoryID) {
+                $thisApp.lastFiler = null;
+                $(".dragger").fadeIn("fast", function () {
+                    $thisApp.ResizeColumnHeight();
+                });
+                $(".listitemstory").removeClass("filtered");
+            } else {
+                $thisApp.lastFiler = userStoryID;
+                $.when($(".dragger:not([data-user-story-id='" + userStoryID + "'])").fadeOut()).done(function () {
+                    $(".dragger[data-user-story-id='" + userStoryID + "']").fadeIn("fast", function () {
+                        $thisApp.ResizeColumnHeight();
+                    });
+                });
+                $(".listitemstory[data-user-story-id='" + userStoryID + "']").addClass("filtered");
+                $(".listitemstory:not([data-user-story-id='" + userStoryID + "'])").removeClass("filtered");
+            }
+        },
+
+        this._retrievePlan = function (iterationId, successFunc) {
+            var $thisApp = this;
+
+            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=20&query=((State%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+            url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=20&query=(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22)";
+
+            $thisApp._checkIfAllUserStoriesHaveTasks(iterationId);
+
+            var $calendar = $("#tblCalender");
+
+            var $firstMorning = $calendar.find("#morning > .div-table-col").first();
+
+            $.getJSON(url, function (data) {
+                if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
+
+                    var fresh = $(".dragger").length == 0;
+
+                    for (i = 0; i < data.QueryResult.TotalResultCount; i++) {
+                        var res = data.QueryResult.Results[i];
+
+                        var usObjectId = res.WorkProduct._ref.substring(res.WorkProduct._ref.lastIndexOf("/") + 1);
+
+                        var existing = false;
+                        var $details = $("#" + res._refObjectUUID + ".dragger");
+                        if ($details && $details.length > 0) {
+                            existing = true;
+                        }
+                        else {
+                            $details = $thisApp.$taskTemplate.clone();
+                        }
+                        $details.attr("data-checkedIfExists", "true");
+                        $details.attr("id", res._refObjectUUID);
+                        $details.attr("data-task-id", res.ObjectID);
+                        $details.attr("data-user-story-id", usObjectId);
+                        $details.css("background-color", res.DisplayColor);
+                        $details.find(".USNumber").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/task/" + res.ObjectID + "'>" + res.FormattedID + "</a>");
+                        $details.find(".whoDoesIt").html(res.Owner._refObjectName);
+                        var cardownerimage = $details.find(".cardOwner > img").attr("data-url");
+                        if (cardownerimage) {
+                            cardownerimage += res.Owner._ref.substring(res.Owner._ref.lastIndexOf("/") + 1);
+                        }
+                        if (cardownerimage) {
+                            $details.find(".cardOwner > img").attr("src", cardownerimage);
+                        }
+                        $details.find(".Story").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/userstory/" + usObjectId + "'>" + res.WorkProduct._refObjectName + "</a>");
+                        $details.find(".Name").html(res.Name);
+                        $details.find(".Estimate").html(res.Estimate || "?");
+
+                        if (!existing) {
+                            $firstMorning.append($details);
+                        }
+                    }
+
+                    if (!fresh) {
+                        $(".dragger:not([data-checkedIfExists])").addClass("notInIterationAnymore");
+                    }
+                }
+
+                if (successFunc) {
+                    successFunc.call(data);
+                }
+            });
+        },
+
+        this._setTitle = function (iterationName) {
+            var $thisApp = this;
+
+            $(window.parent.document)
+                .find(".title")
+                .css("font-size", "24pt")
+                .html(RALLY.activePage.context.project.Name + " - " + (iterationName || "Unscheduled"));
+        },
+
+        this._LoadTemplates = function () {
+            var $thisApp = this;
+
+            if ($("#absenteesTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$absenteesTemplate = $($("#absenteesTemplate").html());
+
+            if ($("#holidaysTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$holidaysTemplate = $($("#holidaysTemplate").html());
+
+            if ($("#workTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$workTemplate = $($("#workTemplate").html());
+
+            if ($("#calendarTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$calendarTemplate = $($("#calendarTemplate").html());
+
+            if ($("#taskTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$taskTemplate = $($("#taskTemplate").html());
+
+            if ($("#tallyTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$tallyTemplate = $($("#tallyTemplate").html());
+
+            if ($("#tallyTableTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$tallyTableTemplate = $($("#tallyTableTemplate").html());
+
+            if ($("#storyTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            $thisApp.$storyTemplate = $($("#storyTemplate").html());
+        },
+
+        this._loadIterationDetails = function (iteration) {
+            var $thisApp = this;
+
+            $thisApp.isLoading = true;
+            $thisApp.currentIterationId = iteration.ObjectID;
+
+            $thisApp._setTitle(iteration.Name);
+            $thisApp._setIterationDetails(iteration.ObjectID);
+
+            var $stories = $("#userStoryFilter > .userstoryfilter");
+            $stories.empty();
+
+            setTimeout(function () {
+                $thisApp._retrievePlan(iteration.Name);
+                $thisApp.ResizeColumnWidths();
+                $thisApp.isLoading = false;
+            }, 3000);
+        },
+
+        this._setIterationDetails = function (objectId) {
+            var $thisApp = this;
+
+            var url = "https://rally1.rallydev.com/slm/webservice/v2.x/Iteration?fetch=true&includePermissions=true&query=(ObjectId = \"" + objectId + "\")";
+
+            var $title = $(window.parent.document).find(".title");
+
+            if (!objectId) {
+                var details = "";
+                if ($title.parent().parent().find(".moreDetails").length == 0) {
+                    details = $("<div class='moreDetails' style='padding: 5px;'>Loading...</div>").insertBefore($title.parent());
+                } else {
+                    details = $title.parent().parent().find(".moreDetails");
+                }
+                details.empty().append("<span style='padding: 5px'>Iteration: <b>Unscheduled.</b>");
+            } else {
+                $.getJSON(url, function (data) {
+                    if (data && data.QueryResult && data.QueryResult.TotalResultCount == 1) {
+                        var res = data.QueryResult.Results[0];
+
+                        var details = "";
+                        if ($title.parent().parent().find(".moreDetails").length == 0) {
+                            details = $("<div class='moreDetails' style='padding: 5px;'>Loading...</div>").insertBefore($title.parent());
+                        } else {
+                            details = $title.parent().parent().find(".moreDetails");
+                        }
+
+                        details.empty();
+                        details.attr("onclick", "window.open('https://rally1.rallydev.com/#/timeboxes');");
+                        details.css("cursor", "pointer");
+
+                        if (res.Theme) {
+                            details.append("<span style='padding: 5px'>Theme: <b>" + res.Theme + "</b>");
+                        }
+                        if (res.State) {
+                            details.append("<span style='padding: 5px'>State: <b>" + res.State + "</b>");
+                        }
+
+                        if (res.StartDate && res.EndDate) {
+                            if (new Date(res.StartDate) < new Date() && new Date(res.EndDate) > new Date()) {
+                                details.append("<span style='padding: 5px'>Iteration: <b>In progress - " + new Date().businessDaysTill(new Date(res.EndDate)) + " Days remaining.</b>");
+                            } else if (new Date(res.EndDate) < new Date()) {
+                                details.append("<span style='padding: 5px'>Iteration: <b>Completed.</b>");
+                            } else if (new Date(res.StartDate) > new Date()) {
+                                details.append("<span style='padding: 5px'>Iteration: <b>Future date.</b>");
+                            }
+                        }
+
+                        var $calendar = $("#tblCalender");
+
+                        $calendar.html($thisApp.$calendarTemplate).refresh();
+
+                        if (res.c_PlanDetails && res.c_PlanDetails.length > 0) {
+                            $calendar.html(res.c_PlanDetails).refresh();
+
+                            $calendar.find('.hiddentextarea').each(function () {
+                                $(this).parent().append($("<textarea />").val($(this).text()));
+                                $(this).remove();
+                            }).refresh();
+
+                            $calendar.find('.dragger').each(function () {
+                                $(this).attr("draggable", "true").attr("ondragstart", "drag(event)");
+                            });
+
+                            $calendar.find('.div-table-col').each(function () {
+                                $(this).attr("ondrop", "drop(event)").attr("ondragover", "allowDrop(event)");
+                            });
+
+                            $calendar.find('.dragger, .div-table-row').each(function () {
+                                var e = $(this);
+                                e.classes().each(function (i, v) {
+                                    if (v.startsWith("id")) {
+                                        e.attr("id", v.substring(2));
+                                        e.removeClass(v);
+                                    }
+                                });
+                            });
+
+                            $calendar.find('.TaskType').each(function () {
+                                $(this).html('<button onclick=\"removeParentTable(this)\">X</button>');
+                            });
+                        } else {
+                            $thisApp._createCalendar(new Date(res.StartDate), new Date(res.EndDate));
+                        }
+
+                        $thisApp.ResizeColumnWidths();
+
+                        $thisApp._retrievePlan(objectId, function (data) {
+
+                            $(".div-table-col-header").click(function () {
+                                var th_index = $(this).index();
+                                $(".div-table-row").each(function () {
+                                    $(this).find('.div-table-col-header-abs').eq(th_index).toggleClass('weekend');
+                                    $(this).find('.div-table-col,.div-table-col-holiday').eq(th_index).toggleClass('highlight');
+                                    $(this).find('.div-table-col-header,.div-table-col-holiday-header').eq(th_index).toggleClass('highlight');
+                                    $(this).find('.div-table-col-tally').eq(th_index).toggleClass('weekend');
+                                });
+
+                                $thisApp.ResizeColumnWidths();
+                            });
+
+                            $thisApp.CalculateTallies();
+                        });
+                    }
+                });
+            }
+        },
+
+        this.ResizeColumnWidths = function () {
+            var $thisApp = this;
+
+            $thisApp._resetResizeInterval();
+
+            if ($thisApp.lastResize && $thisApp.lastResize - new Date() < 5000) {
+                return;
+            }
+
+            var $calendar = $("#tblCalender");
+
+            var $holiday = $calendar.find("#holidays");
+
+            var widthofHolidaysColumns = $holiday.find(".col.highlight").length * $holiday.find(".col.highlight").width();
+            var newwidth = Math.floor(((Math.floor($("#tblCalender").innerWidth()) - widthofHolidaysColumns) / $holiday.find(".col:not(.highlight)").length) * 0.97) - 2; // just a bit smaller
+
+            $(".col:not(.weekend)").width(newwidth);
+            $(".col.weekend").width(20);
+
+            var curWidth = $(".col:not(.highlight)").width();
+            if (curWidth < newwidth) {
+                $(".col:not(.highlight)").animate({ 'width': ("+=" + (newwidth - curWidth)) }, "fast");
+            } else {
+                $(".col:not(.highlight)").animate({ 'width': ("-=" + (newwidth - curWidth)) }, "fast");
+            }
+
+            $(".col.highlight").animate({ 'width': 20 }, "fast");
+        },
+
+        this.ResizeColumnHeight = function () {
+            var $thisApp = this;
+
+            setTimeout(function () {
+
+                var $calendar = $("#tblCalender");
+
+                var $morning = $calendar.find("#morning");
+                var $lunch = $calendar.find("#lunch");
+                var $afternoon = $calendar.find("#afternoon");
+
+                $morning.find('.div-table-col').height("auto").refresh().animate({
+                    'height': Math.max.apply(null, $morning.find('.div-table-col').map(function () {
+                        return $(this).height();
+                    }).get())
+                }, "fast");
+
+                $lunch.find('.div-table-col').height("auto").refresh().animate({
+                    'height': Math.max.apply(null, $lunch.find('.div-table-col').map(function () {
+                        return $(this).height();
+                    }).get())
+                }, "fast");
+
+                $afternoon.find('.div-table-col').height("auto").refresh().animate({
+                    'height': Math.max.apply(null, $afternoon.find('.div-table-col').map(function () {
+                        return $(this).height();
+                    }).get())
+                }, "fast");
+            }, 50);
+        }
+
+        this.CalculateTallies = function () {
+            var $thisApp = this;
+
+            setTimeout(function () {
+                var $calendar = $("#tblCalender");
+
+                $thisApp.ResizeColumnHeight();
+
+                var tallies = {};
+
+                var daysCount = $calendar.find("#tally > .div-table-col-tally").length;
+
+                $calendar.refresh().find('.dragger').each(function () {
+                    var name = $(this).find(".whoDoesIt").text();
+                    var est = parseInt($(this).find(".Estimate").text());
+
+                    if (isNaN(est)) return;
+
+                    if (!tallies[name]) {
+                        tallies[name] = {};
+                        tallies[name]["Estimates"] = new Array(daysCount).fill(0);
+                    }
+
+                    var day = $(this).closest(".div-table-row").find(".div-table-col").index($(this).closest(".div-table-col"));
+
+                    tallies[name].Estimates[day] += est;
+                });
+
+                for (var i = 0; i < daysCount; i++) {
+                    var $tally = $calendar.find(".div-table-col-tally:eq(" + i + ")").find(".data");
+                    $tally.empty();
+                    $.each(tallies, function (name, person) {
+                        if (person.Estimates[i] > 0) {
+                            var $t = $thisApp.$tallyTemplate.clone();
+                            $t.find(".tallyName").html(name);
+                            $t.find(".tallyEst").html(person.Estimates[i]);
+                            $tally.append($t);
+                        }
+                    });
+                }
+            }, 50);
+        },
+
+        this._createCalendar = function (startDate, endDate) {
+            var $thisApp = this;
+
+            var daysCount = startDate.DaysDifferenceBetween(endDate);
+
+            var $calendar = $("#tblCalender");
+
+            var $holidays = $calendar.find("#holidays");
+            var $absentees = $calendar.find("#absentees");
+            var $morning = $calendar.find("#morning");
+            var $lunch = $calendar.find("#lunch");
+            var $afternoon = $calendar.find("#afternoon");
+            var $tally = $calendar.find("#tally");
+
+            $holidays.empty();
+            $absentees.empty();
+            $morning.empty();
+            $lunch.empty();
+            $afternoon.empty();
+            $tally.empty();
+
+            for (var i = 0; i < daysCount; i++) {
+                var myDate = new Date();
+                myDate.setDate(startDate.getDate() + i);
+
+                var $hd = $thisApp.$holidaysTemplate.clone().html(weekday[myDate.getDay()] + "<br/>" + myDate.getDate() + "/" + months[myDate.getMonth()]);
+                var $ab = $thisApp.$absenteesTemplate.clone();
+                var $m = $thisApp.$workTemplate.clone();
+                var $l = $thisApp.$workTemplate.clone();
+                var $a = $thisApp.$workTemplate.clone();
+                var $t = $thisApp.$tallyTableTemplate.clone();
+
+                if (myDate.IsWeekend()) {
+                    $hd.toggleClass('highlight');
+                    $ab.toggleClass('weekend');
+                    $m.toggleClass('highlight');
+                    $l.toggleClass('highlight');
+                    $a.toggleClass('highlight');
+                    $t.toggleClass('weekend');
+                }
+
+                $holidays.append($hd);
+                $absentees.append($ab);
+                $morning.append($m);
+                $lunch.append($l);
+                $afternoon.append($a);
+                $tally.append($t);
+            }
+        }
+    })();
+
+    function onDashboardPageTimeboxFilterChanged(args) {
+        if (args.iteration) {
+            var iteration = args.iteration;
+            if (app) {
+                app.onDashboardIterationChanged(iteration);;
+            }
+        }
+    }
+
+    rally.addOnLoad(function () {
+        $("#appHeader").remove();
+        if (app) {
+            app.onDashboardIterationChanged(RALLY.activePage.context.timeboxFilter.iteration);
+        }
+    });
+
+</script>
