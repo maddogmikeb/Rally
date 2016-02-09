@@ -3,6 +3,10 @@
 <script src="//ajax.googleapis.com/ajax/libs/angularjs/1.4.8/angular.min.js"></script>
 
 <style>
+    body {
+        max-width: 100%;
+    }
+
     .btn {
         background: rgb(0, 169, 224);
         background-image: -webkit-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
@@ -232,9 +236,37 @@
         margin-left: 3px;
     }
 
+    ul.standardTasks {
+        padding-left: 15px;
+        margin-left: 3px;
+    }
+
+    .standardTasks > li {
+        list-style-type: circle;
+    }
+
+        .standardTasks > li > button {
+            width: 10px;
+            height: 10px;
+            padding: 0;
+            vertical-align: top;
+            line-height: 0;
+            box-sizing: border-box;
+        }
+
     li.listitemstory:hover {
         cursor: pointer;
     }
+
+    .filterByName {
+        cursor: pointer;
+        margin-left: -25px;
+        display: block;
+    }
+
+        .filterByName > div {
+            display: inline;
+        }
 
     .filtered {
         font-weight: bolder;
@@ -245,7 +277,7 @@
         border: 1px solid #C6C6C6;
         background-color: #F4F7F8;
         border-collapse: collapse;
-        table-layout: fixed;
+        /*table-layout: fixed;*/
         width: 100%;
     }
 
@@ -267,6 +299,10 @@
     .cardOwner {
         text-align: right;
         width: 20px !important;
+    }
+
+    .customEstimateValue {
+        display: none;
     }
 </style>
 
@@ -302,7 +338,38 @@
         <div id="userStoryFilter" style="width: 10%; float: right; height: 100%;">
             <div style="border-bottom: 1px solid black; margin: 3px;">Iteration Story Filter</div>
             <ul class="userstoryfilter"></ul>
+            <ul class="standardTasks">
+                <li class="listitemstory">
+                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Standup</span>
+                    <button onclick="app.AddCustomTask('Standup', 0.25)" title="Add to plan - You must save.">+</button>
+                </li>
+                <li class="listitemstory">
+                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Showcase</span>
+                    <button onclick="app.AddCustomTask('Showcase', 1.00)" title="Add to plan - You must save.">+</button>
+                </li>
+                <li class="listitemstory">
+                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Planning</span>
+                    <button onclick="app.AddCustomTask('Planning', 2.00)" title="Add to plan - You must save.">+</button>
+                </li>
+                <li class="listitemstory">
+                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Backlog Management</span>
+                    <button onclick="app.AddCustomTask('Backlog Management', 2.00)" title="Add to plan - You must save.">+</button>
+                </li>
+                <li class="listitemstory">
+                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Retrospective</span>
+                    <button onclick="app.AddCustomTask('Retrospective', 1.00)" title="Add to plan - You must save.">+</button>
+                </li>
+                <li class="listitemstory">
+                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Training</span>
+                    <button onclick="app.AddCustomTask('Training', 1.00)" title="Add to plan - You must save.">+</button>
+                </li>
+            </ul>
         </div>
+    </div>
+
+    <div style="width: 100px; margin-top: 20px;">
+        <span style="font-weight: bold;">Team Estimates</span>
+        <ul id="overallTally"></ul>
     </div>
 </body>
 
@@ -321,9 +388,7 @@
 <script type="text/template" id="absenteesTemplate">
     <!-- Absentees Template -->
     <div class='div-table-col-header-abs col'>
-        <textarea>
-            &nbsp;
-        </textarea>
+        <textarea></textarea>
     </div>
 </script>
 
@@ -376,7 +441,7 @@
                         &nbsp;
                     </td>
                     <td class="TaskType">
-                        <button onclick="removeParentTable(this)" title="Remove from plan. Refreshing will bring it back.">X</button>
+                        <button onclick="app.RemoveTask(this)" title="Remove from plan. Refreshing will bring it back.">X</button>
                     </td>
                 </tr>
             </thead>
@@ -402,7 +467,7 @@
                 </tr>
                 <tr class="parentStory">
                     <td colspan="3">
-                        Parent:</br>
+                        Parent:<br />
                         <span class="Story">
                             &nbsp;
                         </span>
@@ -462,6 +527,17 @@
             theString = theString.replace(regEx, arguments[i]);
         }
         return theString;
+    }
+    String.prototype.encode = function () {
+        var str = this.valueOf();
+        return window.btoa(str);;
+        //return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (match, p1) {
+        //  return String.fromCharCode('0x' + p1);
+        //}));
+    }
+    String.prototype.decode = function () {
+        var str = this.valueOf();
+        return window.atob(str);;
     }
 
     $.fn.classes = function (callback) {
@@ -533,16 +609,13 @@
         }
     }
 
-    removeParentTable = function (el) {
-        $(el).closest('.dragger').remove()
-    }
-
     var app = new (function () {
 
         this.isLoading = false,
         this.currentIterationId = "",
         this.templatesLoaded = false,
-        this.lastFiler = null,
+        this.lastStoryFilter = null,
+        this.lastUserFilter = null,
 
         this.$absenteesTemplate = null,
         this.$holidaysTemplate = null,
@@ -575,10 +648,10 @@
             $thisApp.CalculateTallies();
         },
 
-        this._resetResizeInterval =  function() { 
+        this._resetResizeInterval = function () {
             var $thisApp = this;
 
-            if ($thisApp.interval){
+            if ($thisApp.interval) {
                 clearInterval($thisApp.interval);
             }
 
@@ -587,6 +660,41 @@
             }, 60 * 1000);
 
             $thisApp.lastResize = new Date();
+        },
+
+        this.RemoveTask = function (el) {
+            $(el).closest('.dragger').remove();
+            app.CalculateTallies();
+        },
+
+        this.AddCustomTask = function (name, duration) {
+            var $thisApp = this;
+
+            var $calendar = $("#tblCalender");
+
+            var $firstMorning = $calendar.find("#morning > .div-table-col").first();
+
+            $details = $thisApp.$taskTemplate.clone();
+            $details.attr("data-checkedIfExists", "true");
+            $details.attr("id", name);
+            $details.attr("data-task-id", "CustomTasks_" + name.replace(/ /g, ''));
+            $details.attr("data-user-story-id", "CustomTasks");
+            $details.attr("data-user-name", "Whole Team");
+            $details.css("background-color", "red");
+            $details.find("table").first().width("98%");
+            $details.find(".USNumber").html(name);
+            $details.find(".whoDoesIt").html("Whole Team");
+            $details.find(".Estimate").html("<input class='customEstimateInput' style='width: 80%' value='" + duration + "' type='number' min='0.00' max='8.00' step='0.25'><span class='customEstimateValue'>" + duration + "</span>");
+            $details.find(".parentStory").empty();
+
+            $firstMorning.append($details);
+
+            setTimeout(function () {
+                app.ResizeColumnHeight();
+                app.CalculateTallies();
+            }, 50);
+
+            return true;
         },
 
         this._updateRallyIteration = function (input, successfunc) {
@@ -601,7 +709,7 @@
                     data: JSON.stringify(input),
                     success: function (data) {
                         if (successfunc) {
-                            successfunc.call(data);
+                            successfunc.call(this);
                         }
                     },
                     contentType: "application/json",
@@ -622,11 +730,13 @@
             });
         },
 
-        this.Refresh = function () {
+        this.Refresh = function (alreadyShowingMessages) {
             var $thisApp = this;
 
             if ($thisApp.currentIterationId) {
-                $("#Messages").text("Refreshing").fadeIn().delay(1000).fadeOut("slow");
+                if (!alreadyShowingMessages || alreadyShowingMessages == false) {
+                    $("#Messages").text("Refreshing").fadeIn().delay(1000).fadeOut("slow");
+                }
                 $thisApp._setIterationDetails($thisApp.currentIterationId);
             }
 
@@ -638,20 +748,18 @@
             var $thisApp = this;
 
             $("#tblCalender").find('textarea').each(function () {
-                $(this).attr('value', $(this).val());
-                $(this).append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
+                //$(this).attr('value', $(this).val().trim());
+                $(this).parent().append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
             });
 
-            $("#tblCalender").find('.dragger, .div-table-row').each(function () {
-                $(this).addClass('id' + $(this).attr('id'));
-            });
+            //$("#tblCalender").find('.dragger, .div-table-row').each(function () {
+            //    $(this).addClass('id' + $(this).attr('id'));
+            //});
 
-            $thisApp._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").clone(true, true).html() } }, function (data) {
+            $thisApp._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } }, function (data) {
                 $("#Messages").text("Saved iteration information").fadeIn().delay(1000).fadeOut("slow");
-
-                if ($thisApp.currentIterationId) {
-                    $thisApp._retrievePlan($thisApp.currentIterationId);
-                }
+                app.Refresh(true);
+                try { console.log(this.OperationResult.Object.c_PlanDetails); } catch (e) { }
             });
         },
 
@@ -711,20 +819,49 @@
             }, 50);
         },
 
-        this.FilterTasksByUserStory = function (userStoryID) {
+        this.FilterByAssignedTo = function (name) {
             var $thisApp = this;
 
-            if ($thisApp.lastFiler == userStoryID) {
-                $thisApp.lastFiler = null;
+            if (!name || $thisApp.lastUserFilter == name) {
+                $thisApp.lastUserFilter = null;
                 $(".dragger").fadeIn("fast", function () {
-                    $thisApp.ResizeColumnHeight();
+                    app.ResizeColumnHeight();
                 });
                 $(".listitemstory").removeClass("filtered");
             } else {
-                $thisApp.lastFiler = userStoryID;
+
+                $thisApp.lastStoryFilter = null;
+                $thisApp.FilterTasksByUserStory(null);
+
+                $thisApp.lastUserFilter = name;
+
+                $.when($(".dragger:not([data-user-name='" + name + "'])").fadeOut()).done(function () {
+                    $(".dragger[data-user-name='" + name + "']").fadeIn("fast", function () {
+                        app.ResizeColumnHeight();
+                    });
+                });
+                $(".listitemstory[data-user-name='" + name + "']").addClass("filtered");
+                $(".listitemstory:not([data-user-name='" + name + "'])").removeClass("filtered");
+            }
+        },
+
+        this.FilterTasksByUserStory = function (userStoryID) {
+            var $thisApp = this;
+
+            if (!userStoryID || $thisApp.lastStoryFilter == userStoryID) {
+                $thisApp.lastStoryFilter = null;
+                $(".dragger").fadeIn("fast", function () {
+                    app.ResizeColumnHeight();
+                });
+                $(".listitemstory").removeClass("filtered");
+            } else {
+                $thisApp.lastUserFilter = null;
+                $thisApp.FilterByAssignedTo();
+
+                $thisApp.lastStoryFilter = userStoryID;
                 $.when($(".dragger:not([data-user-story-id='" + userStoryID + "'])").fadeOut()).done(function () {
                     $(".dragger[data-user-story-id='" + userStoryID + "']").fadeIn("fast", function () {
-                        $thisApp.ResizeColumnHeight();
+                        app.ResizeColumnHeight();
                     });
                 });
                 $(".listitemstory[data-user-story-id='" + userStoryID + "']").addClass("filtered");
@@ -758,6 +895,7 @@
                         var $details = $("#" + res._refObjectUUID + ".dragger");
                         if ($details && $details.length > 0) {
                             existing = true;
+                            $details.html($thisApp.$taskTemplate.clone().html());
                         }
                         else {
                             $details = $thisApp.$taskTemplate.clone();
@@ -766,7 +904,11 @@
                         $details.attr("id", res._refObjectUUID);
                         $details.attr("data-task-id", res.ObjectID);
                         $details.attr("data-user-story-id", usObjectId);
-                        $details.css("background-color", res.DisplayColor);
+                        $details.attr("data-user-name", res.Owner._refObjectName);
+                        if (res.DisplayColor) {
+                            $details.css("background-color", res.DisplayColor);
+                            $details.find("table").first().width("98%");
+                        }
                         $details.find(".USNumber").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/task/" + res.ObjectID + "'>" + res.FormattedID + "</a>");
                         $details.find(".whoDoesIt").html(res.Owner._refObjectName);
                         var cardownerimage = $details.find(".cardOwner > img").attr("data-url");
@@ -778,7 +920,11 @@
                         }
                         $details.find(".Story").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/userstory/" + usObjectId + "'>" + res.WorkProduct._refObjectName + "</a>");
                         $details.find(".Name").html(res.Name);
-                        $details.find(".Estimate").html(res.Estimate || "?");
+                        if (res.Estimate) {
+                            $details.find(".Estimate").html(res.Estimate);
+                        } else {
+                            $details.find(".Estimate").html("<b style='color: red;'>?</b>");
+                        }
 
                         if (!existing) {
                             $firstMorning.append($details);
@@ -921,10 +1067,10 @@
                         $calendar.html($thisApp.$calendarTemplate).refresh();
 
                         if (res.c_PlanDetails && res.c_PlanDetails.length > 0) {
-                            $calendar.html(res.c_PlanDetails).refresh();
+                            $calendar.html(res.c_PlanDetails.decode()).refresh();
 
                             $calendar.find('.hiddentextarea').each(function () {
-                                $(this).parent().append($("<textarea />").val($(this).text()));
+                                $(this).parent().find("textarea").text($(this).text().trim());
                                 $(this).remove();
                             }).refresh();
 
@@ -936,18 +1082,22 @@
                                 $(this).attr("ondrop", "drop(event)").attr("ondragover", "allowDrop(event)");
                             });
 
-                            $calendar.find('.dragger, .div-table-row').each(function () {
-                                var e = $(this);
-                                e.classes().each(function (i, v) {
-                                    if (v.startsWith("id")) {
-                                        e.attr("id", v.substring(2));
-                                        e.removeClass(v);
-                                    }
-                                });
+                            //$calendar.find('.dragger, .div-table-row').each(function () {
+                            //    var e = $(this);
+                            //    e.classes().each(function (i, v) {
+                            //        if (v.startsWith("id")) {
+                            //            e.attr("id", v.substring(2));
+                            //            e.removeClass(v);
+                            //        }
+                            //    });
+                            //});
+
+                            $calendar.find('td[data-colspan]').each(function () {
+                                $(this).attr("colspan", $(this).attr('data-colspan'));
                             });
 
                             $calendar.find('.TaskType').each(function () {
-                                $(this).html('<button onclick=\"removeParentTable(this)\">X</button>');
+                                $(this).html('<button onclick=\"app.RemoveTask(this)\">X</button>');
                             });
                         } else {
                             $thisApp._createCalendar(new Date(res.StartDate), new Date(res.EndDate));
@@ -1042,6 +1192,8 @@
             setTimeout(function () {
                 var $calendar = $("#tblCalender");
 
+                var $overall = $("#overallTally");
+
                 $thisApp.ResizeColumnHeight();
 
                 var tallies = {};
@@ -1050,18 +1202,39 @@
 
                 $calendar.refresh().find('.dragger').each(function () {
                     var name = $(this).find(".whoDoesIt").text();
-                    var est = parseInt($(this).find(".Estimate").text());
-
-                    if (isNaN(est)) return;
+                    var est = parseFloat($(this).find(".Estimate").text());
 
                     if (!tallies[name]) {
                         tallies[name] = {};
                         tallies[name]["Estimates"] = new Array(daysCount).fill(0);
+                        tallies[name]["Overall"] = 0;
                     }
 
-                    var day = $(this).closest(".div-table-row").find(".div-table-col").index($(this).closest(".div-table-col"));
+                    if (isNaN(est)) {
+                        tallies[name].Overall = "?";
+                    } else {
+                        var day = $(this).closest(".div-table-row").find(".div-table-col").index($(this).closest(".div-table-col"));
+                        tallies[name].Estimates[day] += est;
+                        if (!isNaN(tallies[name].Overall)) {
+                            tallies[name].Overall += est;
+                        }
+                    }
+                });
 
-                    tallies[name].Estimates[day] += est;
+                $overall.empty();
+                $.each(tallies, function (name, person) {
+                    var $temp = $thisApp.$tallyTemplate.clone(true, true);
+
+                    var $t = $("<li />").append( $("<span style='width: 100%;'/>").html($temp.closest("div").html())); //.replaceWith(function () { return "<li>" + this.innerHTML + "</li>"; });
+                    $t.addClass("filterByName").addClass("listitemstory");
+                    $t.attr("data-user-name", name);
+                    $t.find(".tallyName").html(name);
+                    if (!isNaN(person.Overall)) {
+                        $t.find(".tallyEst").html(person.Overall);
+                    } else {
+                        $t.find(".tallyEst").html("?");
+                    }
+                    $overall.append($t);
                 });
 
                 for (var i = 0; i < daysCount; i++) {
@@ -1076,6 +1249,26 @@
                         }
                     });
                 }
+
+                // wire up all the custom tasks again
+                $calendar.find(".customEstimateInput").change(function () {
+                    $(this).parent().find(".customEstimateValue").text($(this).val());
+                    $(this).attr('value', $(this).val());
+                    app.CalculateTallies();
+                });
+
+                // wire up all the custom tasks again
+                $calendar.find(".customEstimateInput").change(function () {
+                    $(this).parent().find(".customEstimateValue").text($(this).val());
+                    $(this).attr('value', $(this).val());
+                    app.CalculateTallies();
+                });
+
+                $("#overallTally").find(".filterByName").click(function () {
+                    var name = $(this).find(".tallyName").text().trim();
+                    app.FilterByAssignedTo(name);
+                });
+
             }, 50);
         },
 
