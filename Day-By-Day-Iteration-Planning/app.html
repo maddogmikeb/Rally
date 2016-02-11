@@ -245,14 +245,14 @@
         list-style-type: circle;
     }
 
-        .standardTasks > li > button {
-            width: 10px;
-            height: 10px;
-            padding: 0;
-            vertical-align: top;
-            line-height: 0;
-            box-sizing: border-box;
-        }
+    li > button {
+        width: 10px;
+        height: 10px;
+        padding: 0;
+        vertical-align: top;
+        line-height: 0;
+        box-sizing: border-box;
+    }
 
     li.listitemstory:hover {
         cursor: pointer;
@@ -271,6 +271,10 @@
     .filtered {
         font-weight: bolder;
     }
+
+        .filtered > span {
+            font-weight: bolder;
+        }
 
     .cardboard {
         margin-bottom: 0;
@@ -338,151 +342,129 @@
         <div id="userStoryFilter" style="width: 10%; float: right; height: 100%;">
             <div style="border-bottom: 1px solid black; margin: 3px;">Iteration Story Filter</div>
             <ul class="userstoryfilter"></ul>
-            <ul class="standardTasks">
-                <li class="listitemstory">
-                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Standup</span>
-                    <button onclick="app.AddCustomTask('Standup', 0.25)" title="Add to plan - You must save.">+</button>
-                </li>
-                <li class="listitemstory">
-                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Showcase</span>
-                    <button onclick="app.AddCustomTask('Showcase', 1.00)" title="Add to plan - You must save.">+</button>
-                </li>
-                <li class="listitemstory">
-                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Planning</span>
-                    <button onclick="app.AddCustomTask('Planning', 2.00)" title="Add to plan - You must save.">+</button>
-                </li>
-                <li class="listitemstory">
-                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Backlog Management</span>
-                    <button onclick="app.AddCustomTask('Backlog Management', 2.00)" title="Add to plan - You must save.">+</button>
-                </li>
-                <li class="listitemstory">
-                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Retrospective</span>
-                    <button onclick="app.AddCustomTask('Retrospective', 1.00)" title="Add to plan - You must save.">+</button>
-                </li>
-                <li class="listitemstory">
-                    <span onclick="javascript:app.FilterTasksByUserStory('CustomTasks')">Training</span>
-                    <button onclick="app.AddCustomTask('Training', 1.00)" title="Add to plan - You must save.">+</button>
-                </li>
-            </ul>
+            <ul class="standardTasks"></ul>
         </div>
     </div>
 
-    <div style="width: 100px; margin-top: 20px;">
+    <div style="width: 200px; margin-top: 20px;">
         <span style="font-weight: bold;">Team Estimates</span>
         <ul id="overallTally"></ul>
     </div>
 </body>
 
-<script type="text/template" id="calendarTemplate">
-    <!-- Calendar Template -->
-    <div class="div-table-row">Absentees/Notes</div>
-    <div id="absentees" class="div-table-row">&nbsp;</div>
-    <div class="div-table-row">Click on the day header to mark as a holiday</div>
-    <div id="holidays" data-name="holidays" class="div-table-row">&nbsp;</div>
-    <div id="morning" data-name="morning" class="div-table-row">&nbsp;</div>
-    <div id="lunch" data-name="lunch" class="div-table-row">&nbsp;</div>
-    <div id="afternoon" data-name="afternoon" class="div-table-row">&nbsp;</div>
-    <div id="tally" data-name="tally" class="div-table-row"></div>
-</script>
+<footer>
+    <script type="text/template" id="calendarTemplate">
+        <!-- Calendar Template -->
+        <div class="div-table-row">Absentees/Notes</div>
+        <div id="absentees" class="div-table-row">&nbsp;</div>
+        <div class="div-table-row">Click on the day header to mark as a holiday</div>
+        <div id="holidays" data-name="holidays" class="div-table-row">&nbsp;</div>
+        <div id="morning" data-name="morning" class="div-table-row">&nbsp;</div>
+        <div id="lunch" data-name="lunch" class="div-table-row">&nbsp;</div>
+        <div id="afternoon" data-name="afternoon" class="div-table-row">&nbsp;</div>
+        <div id="tally" data-name="tally" class="div-table-row"></div>
+    </script>
 
-<script type="text/template" id="absenteesTemplate">
-    <!-- Absentees Template -->
-    <div class='div-table-col-header-abs col'>
-        <textarea></textarea>
-    </div>
-</script>
-
-<script type="text/template" id="holidaysTemplate">
-    <!-- Holidays Template -->
-    <div class='div-table-col-header col' title='Click to mark as a holiday'>
-        &nbsp;
-    </div>
-</script>
-
-<script type="text/template" id="tallyTableTemplate">
-    <!-- Tally Table Template -->
-    <div class='div-table-col-tally col' title='Task estimate per team member per day'>
-        <div style="width: 100%; min-height: 12px; border-bottom: 1px solid #666666; padding-bottom: 4px;">
-            <span style="float: left;  margin: 2px;">
-                Name
-            </span>
-            <span style="float: right; margin: 2px;">
-                Total
-            </span>
+    <script type="text/template" id="absenteesTemplate">
+        <!-- Absentees Template -->
+        <div class='div-table-col-header-abs col'>
+            <textarea></textarea>
         </div>
-        <div class="data">
+    </script>
+
+    <script type="text/template" id="holidaysTemplate">
+        <!-- Holidays Template -->
+        <div class='div-table-col-header col' title='Click to mark as a holiday'>
             &nbsp;
         </div>
-    </div>
-</script>
+    </script>
 
-<script type="text/template" id="tallyTemplate">
-    <!-- Tally Template -->
-    <div style="width: 100%; min-height: 12px;">
-        <span class="tallyName">&nbsp;</span>
-        <span class="tallyEst">&nbsp;</span>
-    </div>
-</script>
+    <script type="text/template" id="tallyTableTemplate">
+        <!-- Tally Table Template -->
+        <div class='div-table-col-tally col' title='Task estimate per team member per day'>
+            <div style="width: 100%; min-height: 12px; border-bottom: 1px solid #666666; padding-bottom: 4px;">
+                <span style="float: left;  margin: 2px;">
+                    Name
+                </span>
+                <span style="float: right; margin: 2px;">
+                    Total
+                </span>
+            </div>
+            <div class="data">
+                &nbsp;
+            </div>
+        </div>
+    </script>
 
-<script type="text/template" id="workTemplate">
-    <!-- Work Template -->
-    <div class='div-table-col col' ondrop='drop(event)' ondragover='allowDrop(event)'>
-        &nbsp;
-    </div>
-</script>
+    <script type="text/template" id="tallyTemplate">
+        <!-- Tally Template -->
+        <div style="width: 100%; min-height: 12px;">
+            <span class="tallyName">&nbsp;</span>
+            <span class="tallyEst">&nbsp;</span>
+        </div>
+    </script>
 
-<script type="text/template" id="taskTemplate">
-    <!-- Task Template -->
-    <div class='dragger cardboard' draggable="true" ondragstart="drag(event)">
-        <table class="cardboard">
-            <thead class="cardheader">
-                <tr>
-                    <td class="USNumber" colspan="2">
-                        &nbsp;
-                    </td>
-                    <td class="TaskType">
-                        <button onclick="app.RemoveTask(this)" title="Remove from plan. Refreshing will bring it back.">X</button>
-                    </td>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="cardWhoDoesIt">
-                    <td>
-                        Est:
-                        <span class="Estimate">
+    <script type="text/template" id="workTemplate">
+        <!-- Work Template -->
+        <div class='div-table-col col' ondrop='drop(event)' ondragover='allowDrop(event)'>
+            &nbsp;
+        </div>
+    </script>
+
+    <script type="text/template" id="taskTemplate">
+        <!-- Task Template -->
+        <div class='dragger cardboard' draggable="true" ondragstart="drag(event)">
+            <table class="cardboard">
+                <thead class="cardheader">
+                    <tr>
+                        <td class="USNumber" colspan="2">
                             &nbsp;
-                        </span>
-                    </td>
-                    <td class="whoDoesIt">
-                        &nbsp;
-                    </td>
-                    <td class="cardOwner">
-                        <img data-url="https://rally1.rallydev.com/slm/profile/viewThumbnailImage.sp?tSize=20&amp;uid=" />
-                    </td>
-                </tr>
-                <tr>
-                    <td class="Name" colspan="3">
-                        &nbsp;
-                    </td>
-                </tr>
-                <tr class="parentStory">
-                    <td colspan="3">
-                        Parent:<br />
-                        <span class="Story">
+                        </td>
+                        <td class="TaskType">
+                            <button onclick="app.RemoveTask(this)" title="Remove from plan. Refreshing will bring it back.">X</button>
+                        </td>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="cardWhoDoesIt">
+                        <td>
+                            Est:
+                            <span class="Estimate">
+                                &nbsp;
+                            </span>
+                        </td>
+                        <td class="whoDoesIt">
                             &nbsp;
-                        </span>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</script>
+                        </td>
+                        <td class="cardOwner">
+                            <img data-url="https://rally1.rallydev.com/slm/profile/viewThumbnailImage.sp?tSize=20&amp;uid=" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="Name" colspan="3">
+                            &nbsp;
+                        </td>
+                    </tr>
+                    <tr class="parentStory">
+                        <td colspan="3">
+                            Parent:<br />
+                            <span class="Story">
+                                &nbsp;
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </script>
 
-<script type="text/template" id="storyTemplate">
-    <li class="listitemstory">
-        &nbsp;
-    </li>
-</script>
+    <script type="text/template" id="storyTemplate">
+        <li class="listitemstory">
+            <span></span>
+            <button title="Add tasks">+</button>
+        </li>
+    </script>
+</footer>
 
 <script>
 
@@ -667,7 +649,7 @@
             app.CalculateTallies();
         },
 
-        this.AddCustomTask = function (name, duration) {
+        this.AddCustomTask = function (id, name, duration) {
             var $thisApp = this;
 
             var $calendar = $("#tblCalender");
@@ -677,8 +659,8 @@
             $details = $thisApp.$taskTemplate.clone();
             $details.attr("data-checkedIfExists", "true");
             $details.attr("id", name);
-            $details.attr("data-task-id", "CustomTasks_" + name.replace(/ /g, ''));
-            $details.attr("data-user-story-id", "CustomTasks");
+            $details.attr("data-task-id", id);
+            $details.attr("data-user-story-id", id);
             $details.attr("data-user-name", "Whole Team");
             $details.css("background-color", "red");
             $details.find("table").first().width("98%");
@@ -692,6 +674,7 @@
             setTimeout(function () {
                 app.ResizeColumnHeight();
                 app.CalculateTallies();
+                app.FilterTasksByUserStory(null);
             }, 50);
 
             return true;
@@ -742,19 +725,16 @@
 
             var $stories = $("#userStoryFilter > .userstoryfilter");
             $stories.empty();
+
+            $thisApp._createStandardStorys();
         },
 
         this.SaveIt = function () {
             var $thisApp = this;
 
             $("#tblCalender").find('textarea').each(function () {
-                //$(this).attr('value', $(this).val().trim());
                 $(this).parent().append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
             });
-
-            //$("#tblCalender").find('.dragger, .div-table-row').each(function () {
-            //    $(this).addClass('id' + $(this).attr('id'));
-            //});
 
             $thisApp._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } }, function (data) {
                 $("#Messages").text("Saved iteration information").fadeIn().delay(1000).fadeOut("slow");
@@ -803,9 +783,10 @@
                             }
 
                             var $story = $thisApp.$storyTemplate.clone();
-                            $story.html(res.FormattedID + "-" + res.Name);
+                            $story.find("span").html(res.FormattedID + "-" + res.Name);
                             $story.attr("data-user-story-id", res.ObjectID);
-                            $story.attr("onclick", "javascript:app.FilterTasksByUserStory('" + res.ObjectID + "')");
+                            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('" + res.ObjectID + "')");
+                            $story.find("button").attr("onclick", "app.AddTasksToStory('" + res.ObjectID + "');");
                             $stories.append($story);
                         }
                         if (total == 1) {
@@ -817,6 +798,15 @@
                 });
 
             }, 50);
+        },
+
+        this.AddTasksToStory = function (ObjectID) {
+            var $thisApp = this;
+
+            var url = "/#/" + RALLY.activePage.context.project.ObjectID + "d/detail/userstory/" + ObjectID + "/tasks";
+            window.open(url, "_new" + ObjectID);
+
+            return true;
         },
 
         this.FilterByAssignedTo = function (name) {
@@ -1007,6 +997,8 @@
             var $stories = $("#userStoryFilter > .userstoryfilter");
             $stories.empty();
 
+            $thisApp._createStandardStorys();
+
             setTimeout(function () {
                 $thisApp._retrievePlan(iteration.Name);
                 $thisApp.ResizeColumnWidths();
@@ -1107,7 +1099,7 @@
 
                         $thisApp._retrievePlan(objectId, function (data) {
 
-                            $(".div-table-col-header").click(function () {
+                            $(".div-table-col-header").off().click(function () {
                                 var th_index = $(this).index();
                                 $(".div-table-row").each(function () {
                                     $(this).find('.div-table-col-header-abs').eq(th_index).toggleClass('weekend');
@@ -1225,7 +1217,7 @@
                 $.each(tallies, function (name, person) {
                     var $temp = $thisApp.$tallyTemplate.clone(true, true);
 
-                    var $t = $("<li />").append( $("<span style='width: 100%;'/>").html($temp.closest("div").html())); //.replaceWith(function () { return "<li>" + this.innerHTML + "</li>"; });
+                    var $t = $("<li />").append($("<span style='width: 100%; float: right;'/>").html($temp.closest("div").html())); //.replaceWith(function () { return "<li>" + this.innerHTML + "</li>"; });
                     $t.addClass("filterByName").addClass("listitemstory");
                     $t.attr("data-user-name", name);
                     $t.find(".tallyName").html(name);
@@ -1251,20 +1243,13 @@
                 }
 
                 // wire up all the custom tasks again
-                $calendar.find(".customEstimateInput").change(function () {
+                $calendar.find(".customEstimateInput").off().change(function () {
                     $(this).parent().find(".customEstimateValue").text($(this).val());
                     $(this).attr('value', $(this).val());
                     app.CalculateTallies();
                 });
 
-                // wire up all the custom tasks again
-                $calendar.find(".customEstimateInput").change(function () {
-                    $(this).parent().find(".customEstimateValue").text($(this).val());
-                    $(this).attr('value', $(this).val());
-                    app.CalculateTallies();
-                });
-
-                $("#overallTally").find(".filterByName").click(function () {
+                $("#overallTally").find(".filterByName").off().click(function () {
                     var name = $(this).find(".tallyName").text().trim();
                     app.FilterByAssignedTo(name);
                 });
@@ -1320,6 +1305,56 @@
                 $afternoon.append($a);
                 $tally.append($t);
             }
+        },
+
+        this._createStandardStorys = function () {
+
+            var $thisApp = this;
+
+            var $stories = $("#userStoryFilter > .standardTasks");
+            $stories.empty();
+
+            var $story = $thisApp.$storyTemplate.clone();
+            $story.find("span").html("Standup");
+            $story.attr("data-user-story-id", "CustomTask_Standup");
+            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Standup')");
+            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Standup', 'Standup', 0.25);");
+            $stories.append($story);
+
+            var $story = $thisApp.$storyTemplate.clone();
+            $story.find("span").html("Showcase");
+            $story.attr("data-user-story-id", "CustomTask_Showcase");
+            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Showcase')");
+            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Showcase', 'Showcase', 1.00);");
+            $stories.append($story);
+
+            var $story = $thisApp.$storyTemplate.clone();
+            $story.find("span").html("Planning");
+            $story.attr("data-user-story-id", "CustomTask_Planning");
+            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Planning')");
+            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Planning', 'Planning', 2.00);");
+            $stories.append($story);
+
+            var $story = $thisApp.$storyTemplate.clone();
+            $story.find("span").html("Backlog Management");
+            $story.attr("data-user-story-id", "CustomTask_Backlog");
+            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Backlog')");
+            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Backlog', 'Backlog Management', 2.00);");
+            $stories.append($story);
+
+            var $story = $thisApp.$storyTemplate.clone();
+            $story.find("span").html("Retrospective");
+            $story.attr("data-user-story-id", "CustomTask_Retro");
+            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Retro')");
+            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Retro', 'Retrospective', 1.00);");
+            $stories.append($story);
+
+            var $story = $thisApp.$storyTemplate.clone();
+            $story.find("span").html("Training");
+            $story.attr("data-user-story-id", "CustomTask_Training");
+            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Training')");
+            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Training', 'Training', 1.00);");
+            $stories.append($story);
         }
     })();
 
