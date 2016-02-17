@@ -433,7 +433,7 @@
                             </span>
                         </td>
                         <td class="whoDoesIt">
-                            &nbsp;
+                            ?
                         </td>
                         <td class="cardOwner">
                             <img data-url="https://rally1.rallydev.com/slm/profile/viewThumbnailImage.sp?tSize=20&amp;uid=" />
@@ -766,7 +766,7 @@
 
             setTimeout(function () {
 
-                var url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=20&query=((ScheduleState%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+                var url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((ScheduleState%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
 
                 var $messages = $("#iterationMessages");
                 var $stories = $("#userStoryFilter > .userstoryfilter");
@@ -811,6 +811,10 @@
         this.FilterByAssignedTo = function (name) {
             var $thisApp = this;
 
+            if (name == "Unassigned") {
+                name = "?";
+            }
+
             if (!name || $thisApp.lastUserFilter == name) {
                 $thisApp.lastUserFilter = null;
                 $(".dragger").fadeIn("fast", function () {
@@ -824,11 +828,20 @@
 
                 $thisApp.lastUserFilter = name;
 
-                $.when($(".dragger:not([data-user-name='" + name + "'])").fadeOut()).done(function () {
-                    $(".dragger[data-user-name='" + name + "']").fadeIn("fast", function () {
-                        app.ResizeColumnHeight();
+                if ($(".dragger:not([data-user-name='" + name + "'])").length > 0) {
+                    $.when($(".dragger:not([data-user-name='" + name + "'])").fadeOut()).done(function () {
+                        if ($(".dragger[data-user-name='" + name + "']").length > 0) {
+                            $(".dragger[data-user-name='" + name + "']").fadeIn("fast", function () {
+                                app.ResizeColumnHeight();
+                            });
+                        } else {
+                            app.ResizeColumnHeight();
+                        }
                     });
-                });
+                } else {
+                    app.ResizeColumnHeight();
+                }
+
                 $(".listitemstory[data-user-name='" + name + "']").addClass("filtered");
                 $(".listitemstory:not([data-user-name='" + name + "'])").removeClass("filtered");
             }
@@ -848,11 +861,20 @@
                 $thisApp.FilterByAssignedTo();
 
                 $thisApp.lastStoryFilter = userStoryID;
-                $.when($(".dragger:not([data-user-story-id='" + userStoryID + "'])").fadeOut()).done(function () {
-                    $(".dragger[data-user-story-id='" + userStoryID + "']").fadeIn("fast", function () {
-                        app.ResizeColumnHeight();
+                if ($(".dragger:not([data-user-story-id='" + userStoryID + "'])").length > 0) {
+                    $.when($(".dragger:not([data-user-story-id='" + userStoryID + "'])").fadeOut()).done(function () {
+                        if ($(".dragger[data-user-story-id='" + userStoryID + "']").length > 0) {
+                            $(".dragger[data-user-story-id='" + userStoryID + "']").fadeIn("fast", function () {
+                                app.ResizeColumnHeight();
+                            });
+                        } else {
+                            app.ResizeColumnHeight();
+                        }
                     });
-                });
+                } else {
+                    app.ResizeColumnHeight();
+                }
+
                 $(".listitemstory[data-user-story-id='" + userStoryID + "']").addClass("filtered");
                 $(".listitemstory:not([data-user-story-id='" + userStoryID + "'])").removeClass("filtered");
             }
@@ -861,8 +883,8 @@
         this._retrievePlan = function (iterationId, successFunc) {
             var $thisApp = this;
 
-            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=20&query=((State%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
-            url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=20&query=(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22)";
+            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=((State%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+            url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22)";
 
             $thisApp._checkIfAllUserStoriesHaveTasks(iterationId);
 
@@ -893,19 +915,23 @@
                         $details.attr("id", res._refObjectUUID);
                         $details.attr("data-task-id", res.ObjectID);
                         $details.attr("data-user-story-id", usObjectId);
-                        $details.attr("data-user-name", res.Owner._refObjectName);
                         if (res.DisplayColor) {
                             $details.css("background-color", res.DisplayColor);
                             $details.find("table").first().width("98%");
                         }
                         $details.find(".USNumber").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/task/" + res.ObjectID + "'>" + res.FormattedID + "</a>");
-                        $details.find(".whoDoesIt").html(res.Owner._refObjectName);
-                        var cardownerimage = $details.find(".cardOwner > img").attr("data-url");
-                        if (cardownerimage) {
-                            cardownerimage += res.Owner._ref.substring(res.Owner._ref.lastIndexOf("/") + 1);
-                        }
-                        if (cardownerimage) {
-                            $details.find(".cardOwner > img").attr("src", cardownerimage);
+                        if (res.Owner && res.Owner._refObjectName) {
+                            $details.attr("data-user-name", res.Owner._refObjectName);
+                            $details.find(".whoDoesIt").html(res.Owner._refObjectName);
+                            var cardownerimage = $details.find(".cardOwner > img").attr("data-url");
+                            if (cardownerimage) {
+                                cardownerimage += res.Owner._ref.substring(res.Owner._ref.lastIndexOf("/") + 1);
+                            }
+                            if (cardownerimage) {
+                                $details.find(".cardOwner > img").attr("src", cardownerimage);
+                            }
+                        } else {
+                            $details.attr("data-user-name", "?");
                         }
                         $details.find(".Story").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/userstory/" + usObjectId + "'>" + res.WorkProduct._refObjectName + "</a>");
                         $details.find(".Name").html(res.Name);
@@ -1120,34 +1146,50 @@
         this.ResizeColumnWidths = function () {
             var $thisApp = this;
 
-            $thisApp._resetResizeInterval();
+            console.log("Start: ResizeColumnWidths" + (new Date()));
 
-            if ($thisApp.lastResize && $thisApp.lastResize - new Date() < 5000) {
-                return;
-            }
+            $("#Messages").fadeOut().text("Resizing column widths - please wait").fadeIn();
 
-            var $calendar = $("#tblCalender");
+            setTimeout(function () {
 
-            var $holiday = $calendar.find("#holidays");
+                $thisApp._resetResizeInterval();
 
-            var widthofHolidaysColumns = $holiday.find(".col.highlight").length * $holiday.find(".col.highlight").width();
-            var newwidth = Math.floor(((Math.floor($("#tblCalender").innerWidth()) - widthofHolidaysColumns) / $holiday.find(".col:not(.highlight)").length) * 0.97) - 2; // just a bit smaller
+                if ($thisApp.lastResize && $thisApp.lastResize - new Date() < 5000) {
+                    $("#Messages").fadeOut("slow").text("");
+                    console.log("End: ResizeColumnWidths (via return)" + (new Date()));
+                    return;
+                }
 
-            $(".col:not(.weekend)").width(newwidth);
-            $(".col.weekend").width(20);
+                var $calendar = $("#tblCalender");
 
-            var curWidth = $(".col:not(.highlight)").width();
-            if (curWidth < newwidth) {
-                $(".col:not(.highlight)").animate({ 'width': ("+=" + (newwidth - curWidth)) }, "fast");
-            } else {
-                $(".col:not(.highlight)").animate({ 'width': ("-=" + (newwidth - curWidth)) }, "fast");
-            }
+                var $holiday = $calendar.find("#holidays");
 
-            $(".col.highlight").animate({ 'width': 20 }, "fast");
+                var widthofHolidaysColumns = $holiday.find(".col.highlight").length * $holiday.find(".col.highlight").width();
+                var newwidth = Math.floor(((Math.floor($("#tblCalender").innerWidth()) - widthofHolidaysColumns) / $holiday.find(".col:not(.highlight)").length) * 0.97) - 2; // just a bit smaller
+
+                $(".col:not(.weekend)").width(newwidth);
+                $(".col.weekend").width(20);
+
+                var curWidth = $(".col:not(.highlight)").width();
+                if (curWidth < newwidth) {
+                    $(".col:not(.highlight)").animate({ 'width': ("+=" + (newwidth - curWidth)) }, "fast");
+                } else {
+                    $(".col:not(.highlight)").animate({ 'width': ("-=" + (newwidth - curWidth)) }, "fast");
+                }
+
+                $(".col.highlight").animate({ 'width': 20 }, "fast");
+
+                $("#Messages").fadeOut("slow").text("");
+                console.log("End: ResizeColumnWidths" + (new Date()));
+
+            }, 50);
         },
 
         this.ResizeColumnHeight = function () {
             var $thisApp = this;
+
+            $("#Messages").fadeOut().text("Resizing column heights - please wait").fadeIn();
+            console.log("Start: ResizeColumnHeight" + (new Date()));
 
             setTimeout(function () {
 
@@ -1157,23 +1199,21 @@
                 var $lunch = $calendar.find("#lunch");
                 var $afternoon = $calendar.find("#afternoon");
 
-                $morning.find('.div-table-col').height("auto").refresh().animate({
-                    'height': Math.max.apply(null, $morning.find('.div-table-col').map(function () {
-                        return $(this).height();
-                    }).get())
-                }, "fast");
+                $morning.find('.div-table-col').height("auto").refresh().height(Math.max.apply(null, $morning.find('.div-table-col').map(function () {
+                    return $(this).height();
+                }).get()));
 
-                $lunch.find('.div-table-col').height("auto").refresh().animate({
-                    'height': Math.max.apply(null, $lunch.find('.div-table-col').map(function () {
-                        return $(this).height();
-                    }).get())
-                }, "fast");
+                $lunch.find('.div-table-col').height("auto").refresh().height(Math.max.apply(null, $lunch.find('.div-table-col').map(function () {
+                    return $(this).height();
+                }).get()));
 
-                $afternoon.find('.div-table-col').height("auto").refresh().animate({
-                    'height': Math.max.apply(null, $afternoon.find('.div-table-col').map(function () {
-                        return $(this).height();
-                    }).get())
-                }, "fast");
+                $afternoon.find('.div-table-col').height("auto").refresh().height(Math.max.apply(null, $afternoon.find('.div-table-col').map(function () {
+                    return $(this).height();
+                }).get()));
+
+                $("#Messages").fadeOut("slow").text("");
+                console.log("End: ResizeColumnHeight" + (new Date()));
+
             }, 50);
         }
 
@@ -1192,7 +1232,10 @@
                 var daysCount = $calendar.find("#tally > .div-table-col-tally").length;
 
                 $calendar.refresh().find('.dragger').each(function () {
-                    var name = $(this).find(".whoDoesIt").text();
+                    var name = $(this).find(".whoDoesIt").text().trim();
+                    if (name == "" || name == "?") {
+                        name = "Unassigned";
+                    }
                     var est = parseFloat($(this).find(".Estimate").text());
 
                     if (!tallies[name]) {
@@ -1306,54 +1349,28 @@
             }
         },
 
-        this._createStandardStorys = function () {
-
+        this._createStandardStory = function (name, id, time) {
             var $thisApp = this;
 
-            var $stories = $("#userStoryFilter > .standardTasks");
-            $stories.empty();
-
             var $story = $thisApp.$storyTemplate.clone();
-            $story.find("span").html("Standup");
-            $story.attr("data-user-story-id", "CustomTask_Standup");
-            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Standup')");
-            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Standup', 'Standup', 0.25);");
-            $stories.append($story);
+            $story.find("span").html(name);
+            $story.attr("data-user-story-id", id);
+            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('" + id + "')");
+            $story.find("button").attr("onclick", "app.AddCustomTask('" + id + "', '" + name + "', " + time + ");");
+            return $story;
+        },
 
-            var $story = $thisApp.$storyTemplate.clone();
-            $story.find("span").html("Showcase");
-            $story.attr("data-user-story-id", "CustomTask_Showcase");
-            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Showcase')");
-            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Showcase', 'Showcase', 1.00);");
-            $stories.append($story);
+        this._createStandardStorys = function () {
+            var $thisApp = this;
 
-            var $story = $thisApp.$storyTemplate.clone();
-            $story.find("span").html("Planning");
-            $story.attr("data-user-story-id", "CustomTask_Planning");
-            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Planning')");
-            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Planning', 'Planning', 2.00);");
-            $stories.append($story);
-
-            var $story = $thisApp.$storyTemplate.clone();
-            $story.find("span").html("Backlog Management");
-            $story.attr("data-user-story-id", "CustomTask_Backlog");
-            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Backlog')");
-            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Backlog', 'Backlog Management', 2.00);");
-            $stories.append($story);
-
-            var $story = $thisApp.$storyTemplate.clone();
-            $story.find("span").html("Retrospective");
-            $story.attr("data-user-story-id", "CustomTask_Retro");
-            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Retro')");
-            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Retro', 'Retrospective', 1.00);");
-            $stories.append($story);
-
-            var $story = $thisApp.$storyTemplate.clone();
-            $story.find("span").html("Training");
-            $story.attr("data-user-story-id", "CustomTask_Training");
-            $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('CustomTask_Training')");
-            $story.find("button").attr("onclick", "app.AddCustomTask('CustomTask_Training', 'Training', 1.00);");
-            $stories.append($story);
+            $("#userStoryFilter > .standardTasks")
+                .empty()
+                .append($thisApp._createStandardStory("Standup", "CustomTask_Standup", 0.25))
+                .append($thisApp._createStandardStory("Showcase", "CustomTask_Showcase", 1.00))
+                .append($thisApp._createStandardStory("Planning", "CustomTask_Planning", 2.00))
+                .append($thisApp._createStandardStory("Backlog Management", "CustomTask_Backlog", 2.00))
+                .append($thisApp._createStandardStory("Retrospective", "CustomTask_Retro", 1.00))
+                .append($thisApp._createStandardStory("Training", "CustomTask_Training", 1.00));
         }
     })();
 
