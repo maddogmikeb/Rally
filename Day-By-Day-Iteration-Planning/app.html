@@ -165,7 +165,12 @@
 
     .USNumber {
         font-weight: bold;
+	padding: 0px;
     }
+
+	   .USNumber a {
+	        padding-left: 20px;
+	    }
 
     .Name {
         font-weight: bold;
@@ -220,14 +225,14 @@
     .tallyName {
         text-align: left;
         float: left;
-        margin: 2px;
+        margin-left: 2px;
     }
 
     .tallyEst {
         text-align: right;
         font-weight: bold;
         float: right;
-        margin: 2px;
+        margin-right: 2px;
     }
 
     ul.userstoryfilter {
@@ -307,6 +312,22 @@
     .customEstimateValue {
         display: none;
     }
+
+    .icon { 
+        background-image: url(/slm/images/rally/sprites/harmonized_chicklet_sprites.png);
+        height: 20px;
+	width: 20px;
+	position: absolute;
+    } 
+
+    .icon.Defect {
+        background-position: 0 60;
+    }
+
+    .icon.HierarchicalRequirement {
+        background-position: 103 60;
+    }
+
 </style>
 
 <body style="margin: 0px; margin-top: 5px; height: 100%;">
@@ -336,18 +357,17 @@
         <div style="width: 90%; float: left; margin:0 auto;">
             <div id="tblCalender" style="width: 100%;" class="div-table">
                 Loading...
-            </div>
+	    </div>
+	    <div style="width: 200px; margin-top: 20px;">
+	        <span style="font-weight: bold;">Team Estimates</span>
+	        <ul id="overallTally"></ul>
+	    </div>
         </div>
         <div id="userStoryFilter" style="width: 10%; float: right; height: 100%;">
             <div style="border-bottom: 1px solid black; margin: 3px;">Iteration Story Filter</div>
             <ul class="userstoryfilter"></ul>
             <ul class="standardTasks"></ul>
         </div>
-    </div>
-
-    <div style="width: 200px; margin-top: 20px;">
-        <span style="font-weight: bold;">Team Estimates</span>
-        <ul id="overallTally"></ul>
     </div>
 </body>
 
@@ -397,7 +417,7 @@
 
     <script type="text/template" id="tallyTemplate">
         <!-- Tally Template -->
-        <div style="width: 100%; min-height: 12px;">
+        <div style="width: 100%; min-height: 12px; text-align: left; margin: 0px;">
             <span class="tallyName">&nbsp;</span>
             <span class="tallyEst">&nbsp;</span>
         </div>
@@ -458,6 +478,7 @@
     </script>
 
     <script type="text/template" id="storyTemplate">
+	<!-- Story Template -->
         <li class="listitemstory">
             <span></span>
             <button title="Add tasks">+</button>
@@ -592,6 +613,8 @@
 
     var app = new (function () {
 
+        self = this,
+
         this.isLoading = false,
         this.currentIterationId = "",
         this.templatesLoaded = false,
@@ -611,36 +634,31 @@
         this.interval = null,
 
         this.onDashboardIterationChanged = function (iteration) {
-            var $thisApp = this;
-
-            if (!$thisApp.templatesLoaded) {
-                $thisApp._LoadTemplates();
+            if (!self.templatesLoaded) {
+                self._LoadTemplates();
             }
 
-            $thisApp._loadIterationDetails(RALLY.activePage.context.timeboxFilter.iteration);
+            self._loadIterationDetails(RALLY.activePage.context.timeboxFilter.iteration);
 
-            $thisApp.ResizeColumnWidths();
+            self.ResizeColumnWidths();
         },
 
-        this.afterDrop = function (event) {
-            var $thisApp = this;
-
-            $thisApp.lastResize = null;
-            $thisApp.CalculateTallies();
+        this.afterDrop = function (event) {            
+            self.lastResize = null;
+            self.CalculateTallies();
         },
 
         this._resetResizeInterval = function () {
-            var $thisApp = this;
 
-            if ($thisApp.interval) {
-                clearInterval($thisApp.interval);
+            if (self.interval) {
+                clearInterval(self.interval);
             }
 
-            $thisApp.interval = setInterval(function () {
-                $thisApp.ResizeColumnWidths();
+            self.interval = setInterval(function () {
+                self.ResizeColumnWidths();
             }, 60 * 1000);
 
-            $thisApp.lastResize = new Date();
+            self.lastResize = new Date();
         },
 
         this.RemoveTask = function (el) {
@@ -649,13 +667,11 @@
         },
 
         this.AddCustomTask = function (id, name, duration) {
-            var $thisApp = this;
-
             var $calendar = $("#tblCalender");
 
             var $firstMorning = $calendar.find("#morning > .div-table-col").first();
 
-            $details = $thisApp.$taskTemplate.clone();
+            $details = self.$taskTemplate.clone();
             $details.attr("data-checkedIfExists", "true");
             $details.attr("id", name);
             $details.attr("data-task-id", id);
@@ -680,14 +696,12 @@
         },
 
         this._updateRallyIteration = function (input, successfunc) {
-            var $thisApp = this;
-
             var url = "https://rally1.rallydev.com/slm/webservice/v2.0/iteration/";
 
             $.getJSON("https://rally1.rallydev.com/slm/webservice/v2.0/security/authorize", function (security) {
                 $.ajax({
                     type: 'POST',
-                    url: url + $thisApp.currentIterationId + "?key=" + security.OperationResult.SecurityToken,
+                    url: url + self.currentIterationId + "?key=" + security.OperationResult.SecurityToken,
                     data: JSON.stringify(input),
                     success: function (data) {
                         if (successfunc) {
@@ -701,41 +715,35 @@
         },
 
         this.Reset = function () {
-            var $thisApp = this;
-
-            $thisApp._updateRallyIteration({ "Iteration": { "c_PlanDetails": null } }, function (data) {
+            self._updateRallyIteration({ "Iteration": { "c_PlanDetails": null } }, function (data) {
                 $("#Messages").text("Reset iteration information completed").fadeIn().delay(1000).fadeOut("slow");
 
-                if ($thisApp.currentIterationId) {
-                    $thisApp._setIterationDetails($thisApp.currentIterationId);
+                if (self.currentIterationId) {
+                    self._setIterationDetails(self.currentIterationId);
                 }
             });
         },
 
         this.Refresh = function (alreadyShowingMessages) {
-            var $thisApp = this;
-
-            if ($thisApp.currentIterationId) {
+            if (self.currentIterationId) {
                 if (!alreadyShowingMessages || alreadyShowingMessages == false) {
                     $("#Messages").text("Refreshing").fadeIn().delay(1000).fadeOut("slow");
                 }
-                $thisApp._setIterationDetails($thisApp.currentIterationId);
+                self._setIterationDetails(self.currentIterationId);
             }
 
             var $stories = $("#userStoryFilter > .userstoryfilter");
             $stories.empty();
 
-            $thisApp._createStandardStorys();
+            self._createStandardStorys();
         },
 
         this.SaveIt = function () {
-            var $thisApp = this;
-
             $("#tblCalender").find('textarea').each(function () {
                 $(this).parent().append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
             });
 
-            $thisApp._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } }, function (data) {
+            self._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } }, function (data) {
                 $("#Messages").text("Saved iteration information").fadeIn().delay(1000).fadeOut("slow");
                 app.Refresh(true);
                 try { console.log(this.OperationResult.Object.c_PlanDetails); } catch (e) { }
@@ -743,8 +751,6 @@
         },
 
         this.PrintIt = function () {
-            var $thisApp = this;
-
             var data = $("#tblCalender").html();
             var mywindow = window.open('', 'my div', 'height=400,width=600');
             mywindow.document.write('<html><head><title>Iteration Plan</title>');
@@ -761,9 +767,7 @@
             return true;
         },
 
-        this._checkIfAllUserStoriesHaveTasks = function (iterationId) {
-            var $thisApp = this;
-
+        this._checkIfAllUserStoriesHaveTasks = function (iterationId) {            
             setTimeout(function () {
 
                 var url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((ScheduleState%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
@@ -772,6 +776,7 @@
                 var $stories = $("#userStoryFilter > .userstoryfilter");
 
                 $.getJSON(url, function (data) {
+                    $messages.empty();
                     if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
 
                         var total = 0;
@@ -781,7 +786,7 @@
                                 total++;
                             }
 
-                            var $story = $thisApp.$storyTemplate.clone();
+                            var $story = self.$storyTemplate.clone();
                             $story.find("span").html(res.FormattedID + "-" + res.Name);
                             $story.attr("data-user-story-id", res.ObjectID);
                             $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('" + res.ObjectID + "')");
@@ -793,40 +798,38 @@
                         } else if (total > 1) {
                             $messages.html("<a target='_top' href='https://rally1.rallydev.com/#/teamplan'>There are " + total + " stories included in the iteration that do not have associated tasks.</a>");
                         }
-                    }
+                    } else {
+                        $messages.html("<a target='_top' href='https://rally1.rallydev.com/#/teamplan'>You may have stories that are completed but the tasks are not - please confirm.</a>");			
+		    }
                 });
 
             }, 50);
         },
 
         this.AddTasksToStory = function (ObjectID) {
-            var $thisApp = this;
-
             var url = "/#/" + RALLY.activePage.context.project.ObjectID + "d/detail/userstory/" + ObjectID + "/tasks";
             window.open(url, "_new" + ObjectID);
 
             return true;
         },
 
-        this.FilterByAssignedTo = function (name) {
-            var $thisApp = this;
-
+        this.FilterByAssignedTo = function (name) {            
             if (name == "Unassigned") {
                 name = "?";
             }
 
-            if (!name || $thisApp.lastUserFilter == name) {
-                $thisApp.lastUserFilter = null;
+            if (!name || self.lastUserFilter == name) {
+                self.lastUserFilter = null;
                 $(".dragger").fadeIn("fast", function () {
                     app.ResizeColumnHeight();
                 });
                 $(".listitemstory").removeClass("filtered");
             } else {
 
-                $thisApp.lastStoryFilter = null;
-                $thisApp.FilterTasksByUserStory(null);
+                self.lastStoryFilter = null;
+                self.FilterTasksByUserStory(null);
 
-                $thisApp.lastUserFilter = name;
+                self.lastUserFilter = name;
 
                 if ($(".dragger:not([data-user-name='" + name + "'])").length > 0) {
                     $.when($(".dragger:not([data-user-name='" + name + "'])").fadeOut()).done(function () {
@@ -848,19 +851,17 @@
         },
 
         this.FilterTasksByUserStory = function (userStoryID) {
-            var $thisApp = this;
-
-            if (!userStoryID || $thisApp.lastStoryFilter == userStoryID) {
-                $thisApp.lastStoryFilter = null;
+            if (!userStoryID || self.lastStoryFilter == userStoryID) {
+                self.lastStoryFilter = null;
                 $(".dragger").fadeIn("fast", function () {
                     app.ResizeColumnHeight();
                 });
                 $(".listitemstory").removeClass("filtered");
             } else {
-                $thisApp.lastUserFilter = null;
-                $thisApp.FilterByAssignedTo();
+                self.lastUserFilter = null;
+                self.FilterByAssignedTo();
 
-                $thisApp.lastStoryFilter = userStoryID;
+                self.lastStoryFilter = userStoryID;
                 if ($(".dragger:not([data-user-story-id='" + userStoryID + "'])").length > 0) {
                     $.when($(".dragger:not([data-user-story-id='" + userStoryID + "'])").fadeOut()).done(function () {
                         if ($(".dragger[data-user-story-id='" + userStoryID + "']").length > 0) {
@@ -881,12 +882,10 @@
         },
 
         this._retrievePlan = function (iterationId, successFunc) {
-            var $thisApp = this;
-
             var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=((State%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
             url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22)";
 
-            $thisApp._checkIfAllUserStoriesHaveTasks(iterationId);
+            self._checkIfAllUserStoriesHaveTasks(iterationId);
 
             var $calendar = $("#tblCalender");
 
@@ -906,10 +905,10 @@
                         var $details = $("#" + res._refObjectUUID + ".dragger");
                         if ($details && $details.length > 0) {
                             existing = true;
-                            $details.html($thisApp.$taskTemplate.clone().html());
+                            $details.html(self.$taskTemplate.clone().html());
                         }
                         else {
-                            $details = $thisApp.$taskTemplate.clone();
+                            $details = self.$taskTemplate.clone();
                         }
                         $details.attr("data-checkedIfExists", "true");
                         $details.attr("id", res._refObjectUUID);
@@ -919,7 +918,7 @@
                             $details.css("background-color", res.DisplayColor);
                             $details.find("table").first().width("98%");
                         }
-                        $details.find(".USNumber").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/task/" + res.ObjectID + "'>" + res.FormattedID + "</a>");
+                        $details.find(".USNumber").html("<span class='icon " + res.WorkProduct._type+ "'></span><a target='_blank' href='https://rally1.rallydev.com/#/detail/task/" + res.ObjectID + "'>" + res.FormattedID + "</a>");
                         if (res.Owner && res.Owner._refObjectName) {
                             $details.attr("data-user-name", res.Owner._refObjectName);
                             $details.find(".whoDoesIt").html(res.Owner._refObjectName);
@@ -958,82 +957,74 @@
         },
 
         this._setTitle = function (iterationName) {
-            var $thisApp = this;
-
             $(window.parent.document)
                 .find(".title")
                 .css("font-size", "24pt")
                 .html(RALLY.activePage.context.project.Name + " - " + (iterationName || "Unscheduled"));
         },
 
-        this._LoadTemplates = function () {
-            var $thisApp = this;
-
+        this._LoadTemplates = function () {            
             if ($("#absenteesTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$absenteesTemplate = $($("#absenteesTemplate").html());
+            self.$absenteesTemplate = $($("#absenteesTemplate").html());
 
             if ($("#holidaysTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$holidaysTemplate = $($("#holidaysTemplate").html());
+            self.$holidaysTemplate = $($("#holidaysTemplate").html());
 
             if ($("#workTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$workTemplate = $($("#workTemplate").html());
+            self.$workTemplate = $($("#workTemplate").html());
 
             if ($("#calendarTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$calendarTemplate = $($("#calendarTemplate").html());
+            self.$calendarTemplate = $($("#calendarTemplate").html());
 
             if ($("#taskTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$taskTemplate = $($("#taskTemplate").html());
+            self.$taskTemplate = $($("#taskTemplate").html());
 
             if ($("#tallyTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$tallyTemplate = $($("#tallyTemplate").html());
+            self.$tallyTemplate = $($("#tallyTemplate").html());
 
             if ($("#tallyTableTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$tallyTableTemplate = $($("#tallyTableTemplate").html());
+            self.$tallyTableTemplate = $($("#tallyTableTemplate").html());
 
             if ($("#storyTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$storyTemplate = $($("#storyTemplate").html());
+            self.$storyTemplate = $($("#storyTemplate").html());
         },
 
         this._loadIterationDetails = function (iteration) {
-            var $thisApp = this;
+            self.isLoading = true;
+            self.currentIterationId = iteration.ObjectID;
 
-            $thisApp.isLoading = true;
-            $thisApp.currentIterationId = iteration.ObjectID;
-
-            $thisApp._setTitle(iteration.Name);
-            $thisApp._setIterationDetails(iteration.ObjectID);
+            self._setTitle(iteration.Name);
+            self._setIterationDetails(iteration.ObjectID);
 
             var $stories = $("#userStoryFilter > .userstoryfilter");
             $stories.empty();
 
-            $thisApp._createStandardStorys();
+            self._createStandardStorys();
 
             setTimeout(function () {
-                $thisApp._retrievePlan(iteration.Name);
-                $thisApp.ResizeColumnWidths();
-                $thisApp.isLoading = false;
+                self._retrievePlan(iteration.Name);
+                self.ResizeColumnWidths();
+                self.isLoading = false;
             }, 3000);
         },
 
         this._setIterationDetails = function (objectId) {
-            var $thisApp = this;
-
             var url = "https://rally1.rallydev.com/slm/webservice/v2.x/Iteration?fetch=true&includePermissions=true&query=(ObjectId = \"" + objectId + "\")";
 
             var $title = $(window.parent.document).find(".title");
@@ -1081,7 +1072,7 @@
 
                         var $calendar = $("#tblCalender");
 
-                        $calendar.html($thisApp.$calendarTemplate).refresh();
+                        $calendar.html(self.$calendarTemplate).refresh();
 
                         if (res.c_PlanDetails && res.c_PlanDetails.length > 0) {
                             $calendar.html(res.c_PlanDetails.decode()).refresh();
@@ -1099,16 +1090,6 @@
                                 $(this).attr("ondrop", "drop(event)").attr("ondragover", "allowDrop(event)");
                             });
 
-                            //$calendar.find('.dragger, .div-table-row').each(function () {
-                            //    var e = $(this);
-                            //    e.classes().each(function (i, v) {
-                            //        if (v.startsWith("id")) {
-                            //            e.attr("id", v.substring(2));
-                            //            e.removeClass(v);
-                            //        }
-                            //    });
-                            //});
-
                             $calendar.find('td[data-colspan]').each(function () {
                                 $(this).attr("colspan", $(this).attr('data-colspan'));
                             });
@@ -1117,12 +1098,12 @@
                                 $(this).html('<button onclick=\"app.RemoveTask(this)\">X</button>');
                             });
                         } else {
-                            $thisApp._createCalendar(new Date(res.StartDate), new Date(res.EndDate));
+                            self._createCalendar(new Date(res.StartDate), new Date(res.EndDate));
                         }
 
-                        $thisApp.ResizeColumnWidths();
+                        self.ResizeColumnWidths();
 
-                        $thisApp._retrievePlan(objectId, function (data) {
+                        self._retrievePlan(objectId, function (data) {
 
                             $(".div-table-col-header").off().click(function () {
                                 var th_index = $(this).index();
@@ -1133,10 +1114,10 @@
                                     $(this).find('.div-table-col-tally').eq(th_index).toggleClass('weekend');
                                 });
 
-                                $thisApp.ResizeColumnWidths();
+                                self.ResizeColumnWidths();
                             });
 
-                            $thisApp.CalculateTallies();
+                            self.CalculateTallies();
                         });
                     }
                 });
@@ -1144,17 +1125,15 @@
         },
 
         this.ResizeColumnWidths = function () {
-            var $thisApp = this;
-
             console.log("Start: ResizeColumnWidths" + (new Date()));
 
             $("#Messages").fadeOut().text("Resizing column widths - please wait").fadeIn();
 
             setTimeout(function () {
 
-                $thisApp._resetResizeInterval();
+                self._resetResizeInterval();
 
-                if ($thisApp.lastResize && $thisApp.lastResize - new Date() < 5000) {
+                if (self.lastResize && self.lastResize - new Date() < 5000) {
                     $("#Messages").fadeOut("slow").text("");
                     console.log("End: ResizeColumnWidths (via return)" + (new Date()));
                     return;
@@ -1185,9 +1164,7 @@
             }, 50);
         },
 
-        this.ResizeColumnHeight = function () {
-            var $thisApp = this;
-
+        this.ResizeColumnHeight = function () {          
             $("#Messages").fadeOut().text("Resizing column heights - please wait").fadeIn();
             console.log("Start: ResizeColumnHeight" + (new Date()));
 
@@ -1218,14 +1195,12 @@
         }
 
         this.CalculateTallies = function () {
-            var $thisApp = this;
-
             setTimeout(function () {
                 var $calendar = $("#tblCalender");
 
                 var $overall = $("#overallTally");
 
-                $thisApp.ResizeColumnHeight();
+                self.ResizeColumnHeight();
 
                 var tallies = {};
 
@@ -1257,7 +1232,7 @@
 
                 $overall.empty();
                 $.each(tallies, function (name, person) {
-                    var $temp = $thisApp.$tallyTemplate.clone(true, true);
+                    var $temp = self.$tallyTemplate.clone(true, true);
 
                     var $t = $("<li />").append($("<span style='width: 100%; float: right;'/>").html($temp.closest("div").html())); //.replaceWith(function () { return "<li>" + this.innerHTML + "</li>"; });
                     $t.addClass("filterByName").addClass("listitemstory");
@@ -1276,7 +1251,7 @@
                     $tally.empty();
                     $.each(tallies, function (name, person) {
                         if (person.Estimates[i] > 0) {
-                            var $t = $thisApp.$tallyTemplate.clone();
+                            var $t = self.$tallyTemplate.clone();
                             $t.find(".tallyName").html(name);
                             $t.find(".tallyEst").html(person.Estimates[i]);
                             $tally.append($t);
@@ -1300,8 +1275,6 @@
         },
 
         this._createCalendar = function (startDate, endDate) {
-            var $thisApp = this;
-
             var daysCount = startDate.DaysDifferenceBetween(endDate);
 
             var $calendar = $("#tblCalender");
@@ -1324,12 +1297,12 @@
                 var myDate = new Date();
                 myDate.setDate(startDate.getDate() + i);
 
-                var $hd = $thisApp.$holidaysTemplate.clone().html(weekday[myDate.getDay()] + "<br/>" + myDate.getDate() + "/" + months[myDate.getMonth()]);
-                var $ab = $thisApp.$absenteesTemplate.clone();
-                var $m = $thisApp.$workTemplate.clone();
-                var $l = $thisApp.$workTemplate.clone();
-                var $a = $thisApp.$workTemplate.clone();
-                var $t = $thisApp.$tallyTableTemplate.clone();
+                var $hd = self.$holidaysTemplate.clone().html(weekday[myDate.getDay()] + "<br/>" + myDate.getDate() + "/" + months[myDate.getMonth()]);
+                var $ab = self.$absenteesTemplate.clone();
+                var $m = self.$workTemplate.clone();
+                var $l = self.$workTemplate.clone();
+                var $a = self.$workTemplate.clone();
+                var $t = self.$tallyTableTemplate.clone();
 
                 if (myDate.IsWeekend()) {
                     $hd.toggleClass('highlight');
@@ -1350,9 +1323,7 @@
         },
 
         this._createStandardStory = function (name, id, time) {
-            var $thisApp = this;
-
-            var $story = $thisApp.$storyTemplate.clone();
+            var $story = self.$storyTemplate.clone();
             $story.find("span").html(name);
             $story.attr("data-user-story-id", id);
             $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('" + id + "')");
@@ -1361,16 +1332,14 @@
         },
 
         this._createStandardStorys = function () {
-            var $thisApp = this;
-
             $("#userStoryFilter > .standardTasks")
                 .empty()
-                .append($thisApp._createStandardStory("Standup", "CustomTask_Standup", 0.25))
-                .append($thisApp._createStandardStory("Showcase", "CustomTask_Showcase", 1.00))
-                .append($thisApp._createStandardStory("Planning", "CustomTask_Planning", 2.00))
-                .append($thisApp._createStandardStory("Backlog Management", "CustomTask_Backlog", 2.00))
-                .append($thisApp._createStandardStory("Retrospective", "CustomTask_Retro", 1.00))
-                .append($thisApp._createStandardStory("Training", "CustomTask_Training", 1.00));
+                .append(self._createStandardStory("Standup", "CustomTask_Standup", 0.25))
+                .append(self._createStandardStory("Showcase", "CustomTask_Showcase", 1.00))
+                .append(self._createStandardStory("Planning", "CustomTask_Planning", 2.00))
+                .append(self._createStandardStory("Backlog Management", "CustomTask_Backlog", 2.00))
+                .append(self._createStandardStory("Retrospective", "CustomTask_Retro", 1.00))
+                .append(self._createStandardStory("Training", "CustomTask_Training", 1.00));
         }
     })();
 
