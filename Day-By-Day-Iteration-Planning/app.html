@@ -165,12 +165,12 @@
 
     .USNumber {
         font-weight: bold;
-	padding: 0px;
+        padding: 0px;
     }
 
-	   .USNumber a {
-	        padding-left: 20px;
-	    }
+        .USNumber a {
+            padding-left: 20px;
+        }
 
     .Name {
         font-weight: bold;
@@ -280,6 +280,10 @@
             font-weight: bolder;
         }
 
+    .hidden {
+        display: none !important;
+    }
+
     .cardboard {
         margin-bottom: 0;
         border: 1px solid #C6C6C6;
@@ -288,6 +292,14 @@
         /*table-layout: fixed;*/
         width: 100%;
     }
+
+        .cardboard.Completed .Name {
+            text-decoration: line-through;
+        }
+
+        .cardboard.In-Progress .Name {
+            color: red;
+        }
 
     .cardheader {
         background-color: #B2E3B6;
@@ -313,31 +325,39 @@
         display: none;
     }
 
-    .icon { 
+    .icon {
         background-image: url(/slm/images/rally/sprites/harmonized_chicklet_sprites.png);
         height: 20px;
-	width: 20px;
-	position: absolute;
-    } 
-
-    .icon.Defect {
-        background-position: 0 60;
+        width: 20px;
+        position: absolute;
     }
 
-    .icon.HierarchicalRequirement {
-        background-position: 103 60;
-    }
+        .icon.Defect {
+            background-position: 0 60;
+        }
 
+        .icon.HierarchicalRequirement {
+            background-position: 103 60;
+        }
 </style>
 
 <body style="margin: 0px; margin-top: 5px; height: 100%;">
     <div style="float: right; text-align: right; padding-bottom: 5px; width: 100%; margin: 5px;">
-        <div style="float: left; text-align: left; margin-left: 20px; width: 50%;" id="iterationMessages">
+        <div style="position: absolute; text-align: left; margin-left: 20px;" id="iterationMessages">
             &nbsp;
         </div>
 
         <div style="float: right; text-align: right; width: 100%;">
             <span id="Messages" style="display: none;">Loading...</span>
+            <span>
+                Task Status:
+                <input checked="checked" type="checkbox" name="Chk_CustomStateTask_Defined" value="Defined" onclick="javascript: app.FilterTasksByState(this, 'Defined')" />
+                <label for="Chk_CustomStateTask_Defined">Defined</label>
+                <input checked="checked" type="checkbox" name="Chk_CustomStateTask_In-Progress" value="In-Progress" onclick="javascript: app.FilterTasksByState(this, 'In-Progress')" />
+                <label for="Chk_CustomStateTask_In-Progress">In-Progress</label>
+                <input checked="checked" type="checkbox" name="Chk_CustomStateTask_Completed" value="Completed" onclick="javascript: app.FilterTasksByState(this, 'Completed')" />
+                <label for="Chk_CustomStateTask_Completed">Completed</label>
+            </span>
             <button onclick="javascript: app.Refresh();" class="btn">
                 Refresh
             </button>
@@ -357,11 +377,11 @@
         <div style="width: 90%; float: left; margin:0 auto;">
             <div id="tblCalender" style="width: 100%;" class="div-table">
                 Loading...
-	    </div>
-	    <div style="width: 200px; margin-top: 20px;">
-	        <span style="font-weight: bold;">Team Estimates</span>
-	        <ul id="overallTally"></ul>
-	    </div>
+            </div>
+            <div style="width: 200px; margin-top: 20px;">
+                <span style="font-weight: bold;">Team Estimates</span>
+                <ul id="overallTally"></ul>
+            </div>
         </div>
         <div id="userStoryFilter" style="width: 10%; float: right; height: 100%;">
             <div style="border-bottom: 1px solid black; margin: 3px;">Iteration Story Filter</div>
@@ -393,7 +413,7 @@
 
     <script type="text/template" id="holidaysTemplate">
         <!-- Holidays Template -->
-        <div class='div-table-col-header col' title='Click to mark as a holiday'>
+        <div class='div-table-col-header col' title='Click to mark as a holiday' data-date=''>
             &nbsp;
         </div>
     </script>
@@ -478,11 +498,24 @@
     </script>
 
     <script type="text/template" id="storyTemplate">
-	<!-- Story Template -->
+        <!-- Story Template -->
         <li class="listitemstory">
             <span></span>
             <button title="Add tasks">+</button>
         </li>
+    </script>
+
+    <script type="text/template" id="discussionTemplate">
+        <!-- Discussion Template -->
+        <p>
+            <a id="note" href='' target='_blank'>Iteration planning note:</a>
+        </p>
+        <p>
+            This task has been planned, as part of '<a id="iteration" href='https://rally1.rallydev.com/#/teamplan' target='_blank'></a>' to be completed <span id="time" style="font-weight:bold;"></span> on <span id="date" style="font-weight:bold;"></span>.
+        </p>
+        <p>
+            The task has been estimated at <span id="estimate" style="font-weight:bold;"></span> and assigned to <span id="assignedto" style="font-weight:bold;"></span>.
+        </p>
     </script>
 </footer>
 
@@ -617,6 +650,7 @@
 
         this.isLoading = false,
         this.currentIterationId = "",
+        this.currentIterationName = "",
         this.templatesLoaded = false,
         this.lastStoryFilter = null,
         this.lastUserFilter = null,
@@ -629,6 +663,7 @@
         this.$tallyTemplate = null,
         this.$tallyTableTemplate = null,
         this.$storyTemplate = null,
+        this.$discussionTemplate = null,
 
         this.lastResize = null,
         this.interval = null,
@@ -643,7 +678,7 @@
             self.ResizeColumnWidths();
         },
 
-        this.afterDrop = function (event) {            
+        this.afterDrop = function (event) {
             self.lastResize = null;
             self.CalculateTallies();
         },
@@ -715,12 +750,16 @@
         },
 
         this.Reset = function () {
-            self._updateRallyIteration({ "Iteration": { "c_PlanDetails": null } }, function (data) {
-                $("#Messages").text("Reset iteration information completed").fadeIn().delay(1000).fadeOut("slow");
+            self._Confirmation("Reset?", "Reset iteration plan? This will delete previously the saved plan and refresh the board.<br/><br/>Note: You may need to log in again with your rally credentials.", function () {
+                self._updateRallyIteration({ "Iteration": { "c_PlanDetails": null } }, function (data) {
+                    $("#Messages").text("Reset iteration information completed").fadeIn().delay(1000).fadeOut("slow");
 
-                if (self.currentIterationId) {
-                    self._setIterationDetails(self.currentIterationId);
-                }
+                    if (self.currentIterationId) {
+                        self._setIterationDetails(self.currentIterationId);
+                    }
+                });
+            }, function () {
+                $("#Messages").text("Reset Cancelled.").fadeIn().delay(1000).fadeOut("slow");
             });
         },
 
@@ -739,14 +778,111 @@
         },
 
         this.SaveIt = function () {
-            $("#tblCalender").find('textarea').each(function () {
-                $(this).parent().append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
-            });
+            self._Confirmation("Save?", "Save iteration plan?<br/><br/>Note: You may need to log in again with your rally credentials.", function () {
+                $("#tblCalender").find('textarea').each(function () {
+                    $(this).parent().append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
+                });
 
-            self._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } }, function (data) {
-                $("#Messages").text("Saved iteration information").fadeIn().delay(1000).fadeOut("slow");
-                app.Refresh(true);
-                try { console.log(this.OperationResult.Object.c_PlanDetails); } catch (e) { }
+                self._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } }, function (data) {
+                    $("#Messages").text("Saved iteration information.").fadeIn().delay(1000).fadeOut("slow");
+                    self._Confirmation("Add discussion notes?", "Do you want to update task discussions with expected completion dates and times? <br/><br/>Note: this may take a little while.", function () {
+                        self._AddTaskComments(function () {
+                            app.Refresh(true);
+                        });
+                    }, function () {
+                        app.Refresh(true);
+                    });
+                    if (console && console.log) {
+                        if (this.OperationResult && this.OperationResult.Object) {
+                            console.log(this.OperationResult.Object.c_PlanDetails);
+                        } else {
+                            console.log("No plan returned.");
+                        }
+                    }
+                });
+            },
+            function () {
+                $("#Messages").text("Save Cancelled.").fadeIn().delay(1000).fadeOut("slow");
+            });
+        },
+
+        this._AddTaskComments = function (callback) {
+
+            var $tasksDiv = $("div.cardboard");
+
+            var allTasks = [];
+            var msg = Ext.Msg.progress('Saving', 'Adding discussion items...');
+            msg.updateProgress(0);
+            var totalCount = $tasksDiv.length;
+
+            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/ConversationPost/create";
+
+            $.getJSON("https://rally1.rallydev.com/slm/webservice/v2.0/security/authorize", function (security) {
+                $tasksDiv.each(function (i, v) {
+                    var $this = $(this);
+                    var tskid = $this.data("task-id");
+                    var date = $this.data("assigned-date");
+                    var day = $this.data("assigned-day");
+                    var time = $this.data("assigned-time");
+                    var to = $this.data("assigned-to");
+                    var est = $this.data("assigned-estimate");
+
+                    var $inputDetails = self.$discussionTemplate.clone();
+                    $inputDetails.find("#note").attr("href", window.top.location.href);
+                    $inputDetails.find("#iteration").html(RALLY.activePage.context.project.Name + " - " + (self.currentIterationName || "Unscheduled"));
+                    $inputDetails.find("#time").html((time == "morning" ? "before lunch" : "before COB"));
+                    $inputDetails.find("#date").html(new Date(date).toDateString());
+                    $inputDetails.find("#estimate").html((est == "?" ? "an unknown number of hours" : (est == 1 ? "1 hour" : est + " hours")));
+                    $inputDetails.find("#assignedto").html(to);
+
+                    var html = $("<div/>").append($inputDetails).html();
+
+                    var input = { "ConversationPost": { "Artifact": tskid, "Text": $("<div/>").append($inputDetails).html() } }
+
+                    $.ajax({
+                        type: 'POST',
+                        url: url + "?key=" + security.OperationResult.SecurityToken,
+                        data: JSON.stringify(input),
+                        success: function (data) {
+                            url = "https://rally1.rallydev.com/slm/webservice/v2.0/task/";
+                            input = { "Task": { "c_DueDate": date } }
+                            $.ajax({
+                                type: 'POST',
+                                url: url + tskid + "?key=" + security.OperationResult.SecurityToken,
+                                data: JSON.stringify(input),
+                                success: function (data) {
+                                    msg.updateProgress((i + 1.00) / totalCount);
+                                },
+                                contentType: "application/json",
+                                dataType: 'json'
+                            });
+                        },
+                        contentType: "application/json",
+                        dataType: 'json'
+                    });
+
+                }).promise().done(function () {
+                    msg.close();
+                });
+            });
+        },
+
+        this._Confirmation = function (title, message, yesCB, noCB) {
+            Ext.create('Rally.ui.dialog.ConfirmDialog', {
+                title: title,
+                message: message,
+                listeners: {
+                    confirm: function () {
+                        if (yesCB) {
+                            yesCB.call(this);
+                        }
+                    },
+                    cancel: function () {
+                        if (noCB) {
+                            noCB.call(this);
+                        }
+                    }
+                }
             });
         },
 
@@ -767,7 +903,7 @@
             return true;
         },
 
-        this._checkIfAllUserStoriesHaveTasks = function (iterationId) {            
+        this._checkIfAllUserStoriesHaveTasks = function (iterationId) {
             setTimeout(function () {
 
                 var url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((ScheduleState%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
@@ -794,13 +930,13 @@
                             $stories.append($story);
                         }
                         if (total == 1) {
-                            $messages.html("<a target='_top' href='https://rally1.rallydev.com/#/teamplan'>There is " + total + " story included in the iteration that does not have associated tasks.</a>");
+                            $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>There is " + total + " story included in the iteration that does not have associated tasks.</a>");
                         } else if (total > 1) {
-                            $messages.html("<a target='_top' href='https://rally1.rallydev.com/#/teamplan'>There are " + total + " stories included in the iteration that do not have associated tasks.</a>");
+                            $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>There are " + total + " stories included in the iteration that do not have associated tasks.</a>");
                         }
                     } else {
-                        $messages.html("<a target='_top' href='https://rally1.rallydev.com/#/teamplan'>You may have stories that are completed but the tasks are not - please confirm.</a>");			
-		    }
+                        $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>You may have stories that are completed but the tasks are not - please confirm.</a>");
+                    }
                 });
 
             }, 50);
@@ -813,7 +949,7 @@
             return true;
         },
 
-        this.FilterByAssignedTo = function (name) {            
+        this.FilterByAssignedTo = function (name) {
             if (name == "Unassigned") {
                 name = "?";
             }
@@ -848,6 +984,15 @@
                 $(".listitemstory[data-user-name='" + name + "']").addClass("filtered");
                 $(".listitemstory:not([data-user-name='" + name + "'])").removeClass("filtered");
             }
+        },
+
+        this.FilterTasksByState = function (checkbox, stateName) {
+            if (!checkbox.checked) {
+                $(".cardboard." + stateName).addClass("hidden");
+            } else {
+                $(".cardboard." + stateName).removeClass("hidden");
+            }
+            self.ResizeColumnHeight();
         },
 
         this.FilterTasksByUserStory = function (userStoryID) {
@@ -918,7 +1063,7 @@
                             $details.css("background-color", res.DisplayColor);
                             $details.find("table").first().width("98%");
                         }
-                        $details.find(".USNumber").html("<span class='icon " + res.WorkProduct._type+ "'></span><a target='_blank' href='https://rally1.rallydev.com/#/detail/task/" + res.ObjectID + "'>" + res.FormattedID + "</a>");
+                        $details.find(".USNumber").html("<span class='icon " + res.WorkProduct._type + "'></span><a target='_blank' href='https://rally1.rallydev.com/#/detail/task/" + res.ObjectID + "'>" + res.FormattedID + "</a>");
                         if (res.Owner && res.Owner._refObjectName) {
                             $details.attr("data-user-name", res.Owner._refObjectName);
                             $details.find(".whoDoesIt").html(res.Owner._refObjectName);
@@ -933,7 +1078,9 @@
                             $details.attr("data-user-name", "?");
                         }
                         $details.find(".Story").html("<a target='_blank' href='https://rally1.rallydev.com/#/detail/userstory/" + usObjectId + "'>" + res.WorkProduct._refObjectName + "</a>");
+                        $details.addClass(res.State);
                         $details.find(".Name").html(res.Name);
+                        $details.find(".Name").attr("title", res.State);
                         if (res.Estimate) {
                             $details.find(".Estimate").html(res.Estimate);
                         } else {
@@ -963,7 +1110,7 @@
                 .html(RALLY.activePage.context.project.Name + " - " + (iterationName || "Unscheduled"));
         },
 
-        this._LoadTemplates = function () {            
+        this._LoadTemplates = function () {
             if ($("#absenteesTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
@@ -1003,12 +1150,17 @@
                 throw new DOMException("Missing Template");
             }
             self.$storyTemplate = $($("#storyTemplate").html());
+
+            if ($("#discussionTemplate").length == 0) {
+                throw new DOMException("Missing Template");
+            }
+            self.$discussionTemplate = $($("#discussionTemplate").html());
         },
 
         this._loadIterationDetails = function (iteration) {
             self.isLoading = true;
             self.currentIterationId = iteration.ObjectID;
-
+            self.currentIterationName = iteration.Name;
             self._setTitle(iteration.Name);
             self._setIterationDetails(iteration.ObjectID);
 
@@ -1164,7 +1316,7 @@
             }, 50);
         },
 
-        this.ResizeColumnHeight = function () {          
+        this.ResizeColumnHeight = function () {
             $("#Messages").fadeOut().text("Resizing column heights - please wait").fadeIn();
             console.log("Start: ResizeColumnHeight" + (new Date()));
 
@@ -1211,18 +1363,27 @@
                     if (name == "" || name == "?") {
                         name = "Unassigned";
                     }
-                    var est = parseFloat($(this).find(".Estimate").text());
-
                     if (!tallies[name]) {
                         tallies[name] = {};
                         tallies[name]["Estimates"] = new Array(daysCount).fill(0);
                         tallies[name]["Overall"] = 0;
                     }
 
+                    var est = parseFloat($(this).find(".Estimate").text());
+                    var day = $(this).closest(".div-table-row").find(".div-table-col").index($(this).closest(".div-table-col"));
+                    var timeofday = $(this).closest(".div-table-row").data("name");
+                    var date = $(".div-table-col-header:eq(" + day + ")").data("date");
+                    $(this).attr("data-assigned-date", date);
+                    $(this).attr("data-assigned-day", day);
+                    $(this).attr("data-assigned-time", timeofday);
+                    $(this).attr("data-assigned-to", name);
+
                     if (isNaN(est)) {
                         tallies[name].Overall = "?";
+                        $(this).attr("data-assigned-estimate", "?");
                     } else {
-                        var day = $(this).closest(".div-table-row").find(".div-table-col").index($(this).closest(".div-table-col"));
+                        $(this).attr("data-assigned-estimate", est);
+
                         tallies[name].Estimates[day] += est;
                         if (!isNaN(tallies[name].Overall)) {
                             tallies[name].Overall += est;
@@ -1298,6 +1459,8 @@
                 myDate.setDate(startDate.getDate() + i);
 
                 var $hd = self.$holidaysTemplate.clone().html(weekday[myDate.getDay()] + "<br/>" + myDate.getDate() + "/" + months[myDate.getMonth()]);
+                $hd.attr("data-date", myDate.toISOString());
+
                 var $ab = self.$absenteesTemplate.clone();
                 var $m = self.$workTemplate.clone();
                 var $l = self.$workTemplate.clone();
