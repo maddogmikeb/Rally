@@ -527,6 +527,15 @@
     var weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+    Date.prototype.setToMidnight = function () {
+        var time = new Date(Date.UTC(this.getFullYear(), this.getMonth(), this.getDate()));
+        return time;
+    }
+    Date.prototype.addHours = function (h) {
+        var time = new Date(this.getTime());
+        time.setTime(time.getTime() + (h * 60 * 60 * 1000));
+        return time;
+    }
     Date.prototype.addDays = function (days) {
         var date = new Date(this.valueOf());
         date.setDate(date.getDate() + days);
@@ -751,7 +760,7 @@
 
         this.Reset = function () {
             self._Confirmation("Reset?", "Reset iteration plan? This will delete previously the saved plan and refresh the board.<br/><br/>Note: You may need to log in again with your rally credentials.", function () {
-                self._updateRallyIteration({ "Iteration": { "c_PlanDetails": null } }, function (data) {
+                self._updateRallyIteration({ "Iteration": { "c_PlanDetails": "" } }, function (data) {
                     $("#Messages").text("Reset iteration information completed").fadeIn().delay(1000).fadeOut("slow");
 
                     if (self.currentIterationId) {
@@ -779,11 +788,43 @@
 
         this.SaveIt = function () {
             self._Confirmation("Save?", "Save iteration plan?<br/><br/>Note: You may need to log in again with your rally credentials.", function () {
-                $("#tblCalender").find('textarea').each(function () {
-                    $(this).parent().append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
+                var tasks = [];
+                $("div.cardboard").each(function (i, v) {
+                    var $this = $(this);
+                    tasks.push({
+                        "id": $this.data("task-id"),
+                        "assigned-date": new Date($this.data("assigned-date")),
+                        "assigned-day": $this.data("assigned-day"),
+                        "assigned-time": $this.data("assigned-time"),
+                        "assigned-to": $this.data("assigned-to"),
+                        "assigned-estimate": $this.data("assigned-estimate"),
+                    });
                 });
 
-                self._updateRallyIteration({ "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } }, function (data) {
+                var notes = [];
+                $("#tblCalender").find('textarea').each(function () {
+                    //$(this).parent().append($("<span style='display: none;' class='hiddentextarea' />").html($(this).val()));
+                    var index = $(this).closest(".div-table-row").find(".col").index($(this).closest(".col"));
+                    notes.push({
+                        note: $(this).val(),
+                        index: index,
+                    });
+                });
+
+                var plandetails =
+                    {
+                        tasks: tasks,
+                        notes: notes,
+                        iterationId: self.currentIterationId,
+                        startDate: new Date($("#tblCalender").data("start-date")),
+                        endDate: new Date($("#tblCalender").data("end-date")),
+                    };
+
+                var planjson = JSON.stringify(plandetails);
+                var plan = { "Iteration": { "c_PlanDetails": planjson.encode() } };
+                //var plan = { "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } };
+
+                self._updateRallyIteration(plan, function (data) {
                     $("#Messages").text("Saved iteration information.").fadeIn().delay(1000).fadeOut("slow");
                     self._Confirmation("Add discussion notes?", "Do you want to update task discussions with expected completion dates and times? <br/><br/>Note: this may take a little while.", function () {
                         self._AddTaskComments(function () {
@@ -821,7 +862,7 @@
                 $tasksDiv.each(function (i, v) {
                     var $this = $(this);
                     var tskid = $this.data("task-id");
-                    var date = $this.data("assigned-date");
+                    var date = new Date($this.data("assigned-date"));
                     var day = $this.data("assigned-day");
                     var time = $this.data("assigned-time");
                     var to = $this.data("assigned-to");
@@ -831,13 +872,16 @@
                     $inputDetails.find("#note").attr("href", window.top.location.href);
                     $inputDetails.find("#iteration").html(RALLY.activePage.context.project.Name + " - " + (self.currentIterationName || "Unscheduled"));
                     $inputDetails.find("#time").html((time == "morning" ? "before lunch" : "before COB"));
-                    $inputDetails.find("#date").html(new Date(date).toDateString());
+
+                    var timeDate = date.addHours(time == "morning" ? 11 : time == "lunch" ? 13 : 17);
+                    $inputDetails.find("#date").html(timeDate.toDateString());
                     $inputDetails.find("#estimate").html((est == "?" ? "an unknown number of hours" : (est == 1 ? "1 hour" : est + " hours")));
                     $inputDetails.find("#assignedto").html(to);
 
                     var html = $("<div/>").append($inputDetails).html();
 
                     var input = { "ConversationPost": { "Artifact": tskid, "Text": $("<div/>").append($inputDetails).html() } }
+                    var taskinput = { "Task": { "c_DueDate": timeDate } };
 
                     $.ajax({
                         type: 'POST',
@@ -845,11 +889,10 @@
                         data: JSON.stringify(input),
                         success: function (data) {
                             url = "https://rally1.rallydev.com/slm/webservice/v2.0/task/";
-                            input = { "Task": { "c_DueDate": date } }
                             $.ajax({
                                 type: 'POST',
                                 url: url + tskid + "?key=" + security.OperationResult.SecurityToken,
-                                data: JSON.stringify(input),
+                                data: JSON.stringify(taskinput),
                                 success: function (data) {
                                     msg.updateProgress((i + 1.00) / totalCount);
                                 },
@@ -927,7 +970,9 @@
                             $story.attr("data-user-story-id", res.ObjectID);
                             $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('" + res.ObjectID + "')");
                             $story.find("button").attr("onclick", "app.AddTasksToStory('" + res.ObjectID + "');");
-                            $stories.append($story);
+                            if ($stories.find(".listitemstory[data-user-story-id='[" + res.ObjectID + "']").length == 0) {
+                                $stories.append($story);
+                            }
                         }
                         if (total == 1) {
                             $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>There is " + total + " story included in the iteration that does not have associated tasks.</a>");
@@ -945,7 +990,6 @@
         this.AddTasksToStory = function (ObjectID) {
             var url = "/#/" + RALLY.activePage.context.project.ObjectID + "d/detail/userstory/" + ObjectID + "/tasks";
             window.open(url, "_new" + ObjectID);
-
             return true;
         },
 
@@ -993,6 +1037,7 @@
                 $(".cardboard." + stateName).removeClass("hidden");
             }
             self.ResizeColumnHeight();
+            app.CalculateTallies();
         },
 
         this.FilterTasksByUserStory = function (userStoryID) {
@@ -1027,8 +1072,8 @@
         },
 
         this._retrievePlan = function (iterationId, successFunc) {
-            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=((State%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
-            url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22)";
+            //var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=((State%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22)";
 
             self._checkIfAllUserStoriesHaveTasks(iterationId);
 
@@ -1223,37 +1268,10 @@
                         }
 
                         var $calendar = $("#tblCalender");
-
+                        $calendar.attr("data-start-date", res.StartDate);
+                        $calendar.attr("data-end-date", res.EndDate);
                         $calendar.html(self.$calendarTemplate).refresh();
-
-                        if (res.c_PlanDetails && res.c_PlanDetails.length > 0) {
-                            $calendar.html(res.c_PlanDetails.decode()).refresh();
-
-                            $calendar.find('.hiddentextarea').each(function () {
-                                $(this).parent().find("textarea").text($(this).text().trim());
-                                $(this).remove();
-                            }).refresh();
-
-                            $calendar.find('.dragger').each(function () {
-                                $(this).attr("draggable", "true").attr("ondragstart", "drag(event)");
-                            });
-
-                            $calendar.find('.div-table-col').each(function () {
-                                $(this).attr("ondrop", "drop(event)").attr("ondragover", "allowDrop(event)");
-                            });
-
-                            $calendar.find('td[data-colspan]').each(function () {
-                                $(this).attr("colspan", $(this).attr('data-colspan'));
-                            });
-
-                            $calendar.find('.TaskType').each(function () {
-                                $(this).html('<button onclick=\"app.RemoveTask(this)\">X</button>');
-                            });
-                        } else {
-                            self._createCalendar(new Date(res.StartDate), new Date(res.EndDate));
-                        }
-
-                        self.ResizeColumnWidths();
+                        self._createCalendar(new Date(res.StartDate), new Date(res.EndDate));
 
                         self._retrievePlan(objectId, function (data) {
 
@@ -1269,6 +1287,23 @@
                                 self.ResizeColumnWidths();
                             });
 
+                            if (res.c_PlanDetails && res.c_PlanDetails.length > 0) {
+                                var plan = undefined;
+                                try { plan = JSON.parse(res.c_PlanDetails.decode()); } catch (e) { plan = undefined; };
+                                if (plan) {
+                                    $(plan.tasks).each(function (i, v) {
+                                        var element = $(".cardboard[data-task-id='" + v["id"] + "']");
+                                        if (element && element.length == 1) {
+                                            $($('#' + v["assigned-time"]).find(".col").get(v["assigned-day"])).append(element.detach());
+                                        }
+                                    });
+                                    $(plan.notes).each(function (i, v) {
+                                        $($("#tblCalender").find('textarea').get(v.index)).val(v.note);
+                                    });
+                                }
+                            }
+
+                            self.ResizeColumnWidths();
                             self.CalculateTallies();
                         });
                     }
@@ -1277,7 +1312,7 @@
         },
 
         this.ResizeColumnWidths = function () {
-            console.log("Start: ResizeColumnWidths" + (new Date()));
+            //console.log("Start: ResizeColumnWidths" + (new Date()));
 
             $("#Messages").fadeOut().text("Resizing column widths - please wait").fadeIn();
 
@@ -1287,7 +1322,7 @@
 
                 if (self.lastResize && self.lastResize - new Date() < 5000) {
                     $("#Messages").fadeOut("slow").text("");
-                    console.log("End: ResizeColumnWidths (via return)" + (new Date()));
+                    //console.log("End: ResizeColumnWidths (via return)" + (new Date()));
                     return;
                 }
 
@@ -1311,14 +1346,14 @@
                 $(".col.highlight").animate({ 'width': 20 }, "fast");
 
                 $("#Messages").fadeOut("slow").text("");
-                console.log("End: ResizeColumnWidths" + (new Date()));
+                //console.log("End: ResizeColumnWidths" + (new Date()));
 
             }, 50);
         },
 
         this.ResizeColumnHeight = function () {
             $("#Messages").fadeOut().text("Resizing column heights - please wait").fadeIn();
-            console.log("Start: ResizeColumnHeight" + (new Date()));
+            //console.log("Start: ResizeColumnHeight" + (new Date()));
 
             setTimeout(function () {
 
@@ -1341,7 +1376,7 @@
                 }).get()));
 
                 $("#Messages").fadeOut("slow").text("");
-                console.log("End: ResizeColumnHeight" + (new Date()));
+                //console.log("End: ResizeColumnHeight" + (new Date()));
 
             }, 50);
         }
@@ -1349,16 +1384,11 @@
         this.CalculateTallies = function () {
             setTimeout(function () {
                 var $calendar = $("#tblCalender");
-
                 var $overall = $("#overallTally");
-
                 self.ResizeColumnHeight();
-
                 var tallies = {};
-
                 var daysCount = $calendar.find("#tally > .div-table-col-tally").length;
-
-                $calendar.refresh().find('.dragger').each(function () {
+                $calendar.refresh().find('.dragger:not(.hidden)').each(function () {
                     var name = $(this).find(".whoDoesIt").text().trim();
                     if (name == "" || name == "?") {
                         name = "Unassigned";
@@ -1455,7 +1485,7 @@
             $tally.empty();
 
             for (var i = 0; i < daysCount; i++) {
-                var myDate = new Date();
+                var myDate = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate(), 0, startDate.getTimezoneOffset()));
                 myDate.setDate(startDate.getDate() + i);
 
                 var $hd = self.$holidaysTemplate.clone().html(weekday[myDate.getDay()] + "<br/>" + myDate.getDate() + "/" + months[myDate.getMonth()]);
