@@ -349,13 +349,13 @@
 
         <div style="float: right; text-align: right; width: 100%;">
             <span id="Messages" style="display: none;">Loading...</span>
-            <span>
+            <span id="taskStatusChecks">
                 Task Status:
-                <input checked="checked" type="checkbox" name="Chk_CustomStateTask_Defined" value="Defined" onclick="javascript: app.FilterTasksByState(this, 'Defined')" />
+                <input checked="checked" type="checkbox" id="Chk_CustomStateTask_Defined" value="Defined" onclick="javascript: app.FilterTasksByState(this, 'Defined')" />
                 <label for="Chk_CustomStateTask_Defined">Defined</label>
-                <input checked="checked" type="checkbox" name="Chk_CustomStateTask_In-Progress" value="In-Progress" onclick="javascript: app.FilterTasksByState(this, 'In-Progress')" />
+                <input checked="checked" type="checkbox" id="Chk_CustomStateTask_In-Progress" value="In-Progress" onclick="javascript: app.FilterTasksByState(this, 'In-Progress')" />
                 <label for="Chk_CustomStateTask_In-Progress">In-Progress</label>
-                <input checked="checked" type="checkbox" name="Chk_CustomStateTask_Completed" value="Completed" onclick="javascript: app.FilterTasksByState(this, 'Completed')" />
+                <input checked="checked" type="checkbox" id="Chk_CustomStateTask_Completed" value="Completed" onclick="javascript: app.FilterTasksByState(this, 'Completed')" />
                 <label for="Chk_CustomStateTask_Completed">Completed</label>
             </span>
             <button onclick="javascript: app.Refresh();" class="btn">
@@ -392,7 +392,7 @@
 </body>
 
 <footer>
-    <script type="text/template" id="calendarTemplate">
+    <script type="text/x-template" id="calendarTemplate">
         <!-- Calendar Template -->
         <div class="div-table-row">Absentees/Notes</div>
         <div id="absentees" class="div-table-row">&nbsp;</div>
@@ -404,21 +404,21 @@
         <div id="tally" data-name="tally" class="div-table-row"></div>
     </script>
 
-    <script type="text/template" id="absenteesTemplate">
+    <script type="text/x-template" id="absenteesTemplate">
         <!-- Absentees Template -->
         <div class='div-table-col-header-abs col'>
             <textarea></textarea>
         </div>
     </script>
 
-    <script type="text/template" id="holidaysTemplate">
+    <script type="text/x-template" id="holidaysTemplate">
         <!-- Holidays Template -->
         <div class='div-table-col-header col' title='Click to mark as a holiday' data-date=''>
             &nbsp;
         </div>
     </script>
 
-    <script type="text/template" id="tallyTableTemplate">
+    <script type="text/x-template" id="tallyTableTemplate">
         <!-- Tally Table Template -->
         <div class='div-table-col-tally col' title='Task estimate per team member per day'>
             <div style="width: 100%; min-height: 12px; border-bottom: 1px solid #666666; padding-bottom: 4px;">
@@ -435,7 +435,7 @@
         </div>
     </script>
 
-    <script type="text/template" id="tallyTemplate">
+    <script type="text/x-template" id="tallyTemplate">
         <!-- Tally Template -->
         <div style="width: 100%; min-height: 12px; text-align: left; margin: 0px;">
             <span class="tallyName">&nbsp;</span>
@@ -443,14 +443,14 @@
         </div>
     </script>
 
-    <script type="text/template" id="workTemplate">
+    <script type="text/x-template" id="workTemplate">
         <!-- Work Template -->
         <div class='div-table-col col' ondrop='drop(event)' ondragover='allowDrop(event)'>
             &nbsp;
         </div>
     </script>
 
-    <script type="text/template" id="taskTemplate">
+    <script type="text/x-template" id="taskTemplate">
         <!-- Task Template -->
         <div class='dragger cardboard' draggable="true" ondragstart="drag(event)">
             <table class="cardboard">
@@ -497,7 +497,7 @@
         </div>
     </script>
 
-    <script type="text/template" id="storyTemplate">
+    <script type="text/x-template" id="storyTemplate">
         <!-- Story Template -->
         <li class="listitemstory">
             <span></span>
@@ -505,7 +505,7 @@
         </li>
     </script>
 
-    <script type="text/template" id="discussionTemplate">
+    <script type="text/x-template" id="discussionTemplate">
         <!-- Discussion Template -->
         <p>
             <a id="note" href='' target='_blank'>Iteration planning note:</a>
@@ -575,9 +575,6 @@
     String.prototype.encode = function () {
         var str = this.valueOf();
         return window.btoa(str);;
-        //return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (match, p1) {
-        //  return String.fromCharCode('0x' + p1);
-        //}));
     }
     String.prototype.decode = function () {
         var str = this.valueOf();
@@ -772,11 +769,9 @@
             });
         },
 
-        this.Refresh = function (alreadyShowingMessages) {
+        this.Refresh = function () {
             if (self.currentIterationId) {
-                if (!alreadyShowingMessages || alreadyShowingMessages == false) {
-                    $("#Messages").text("Refreshing").fadeIn().delay(1000).fadeOut("slow");
-                }
+                $("#Messages").text("Refreshing").fadeIn().delay(1000).fadeOut("slow");
                 self._setIterationDetails(self.currentIterationId);
             }
 
@@ -787,6 +782,8 @@
         },
 
         this.SaveIt = function () {
+            self.CalculateTallies();
+
             self._Confirmation("Save?", "Save iteration plan?<br/><br/>Note: You may need to log in again with your rally credentials.", function () {
                 var tasks = [];
                 $("div.cardboard").each(function (i, v) {
@@ -811,10 +808,28 @@
                     });
                 });
 
+                var days = [];
+                $("#tblCalender").find('#holidays > .col').each(function (i, v) {
+                    var $this = $(v);
+                    days.push({
+                        date: $this.data("date"),
+                        holiday: $this.hasClass("highlight")
+                    });
+                });
+
+                var taskStatusChecks =
+                    {
+                        defined: $("#taskStatusChecks").find("#Chk_CustomStateTask_Defined").is(':checked'),
+                        inProgress: $("#taskStatusChecks").find("#Chk_CustomStateTask_In-Progress").is(':checked'),
+                        completed: $("#taskStatusChecks").find("#Chk_CustomStateTask_Completed").is(':checked'),
+                    };
+
                 var plandetails =
                     {
                         tasks: tasks,
                         notes: notes,
+                        days: days,
+                        taskStatusChecks: taskStatusChecks,
                         iterationId: self.currentIterationId,
                         startDate: new Date($("#tblCalender").data("start-date")),
                         endDate: new Date($("#tblCalender").data("end-date")),
@@ -822,24 +837,16 @@
 
                 var planjson = JSON.stringify(plandetails);
                 var plan = { "Iteration": { "c_PlanDetails": planjson.encode() } };
-                //var plan = { "Iteration": { "c_PlanDetails": $("#tblCalender").html().encode() } };
 
                 self._updateRallyIteration(plan, function (data) {
                     $("#Messages").text("Saved iteration information.").fadeIn().delay(1000).fadeOut("slow");
                     self._Confirmation("Add discussion notes?", "Do you want to update task discussions with expected completion dates and times? <br/><br/>Note: this may take a little while.", function () {
                         self._AddTaskComments(function () {
-                            app.Refresh(true);
+                            app.Refresh();
                         });
                     }, function () {
-                        app.Refresh(true);
+                        app.Refresh();
                     });
-                    if (console && console.log) {
-                        if (this.OperationResult && this.OperationResult.Object) {
-                            console.log(this.OperationResult.Object.c_PlanDetails);
-                        } else {
-                            console.log("No plan returned.");
-                        }
-                    }
                 });
             },
             function () {
@@ -978,9 +985,9 @@
                             $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>There is " + total + " story included in the iteration that does not have associated tasks.</a>");
                         } else if (total > 1) {
                             $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>There are " + total + " stories included in the iteration that do not have associated tasks.</a>");
+                        } else {
+                            $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>You may have stories that are completed but the tasks are not - please confirm.</a>");
                         }
-                    } else {
-                        $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>You may have stories that are completed but the tasks are not - please confirm.</a>");
                     }
                 });
 
@@ -1072,7 +1079,6 @@
         },
 
         this._retrievePlan = function (iterationId, successFunc) {
-            //var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=((State%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
             var url = "https://rally1.rallydev.com/slm/webservice/v2.0/task?fetch=true&start=1&pagesize=200&query=(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22)";
 
             self._checkIfAllUserStoriesHaveTasks(iterationId);
@@ -1143,7 +1149,7 @@
                 }
 
                 if (successFunc) {
-                    successFunc.call(data);
+                    successFunc(data);
                 }
             });
         },
@@ -1203,21 +1209,33 @@
         },
 
         this._loadIterationDetails = function (iteration) {
+
+            var msg = Ext.Msg.progress('Loading', 'Loading iteration details...');
+            msg.updateProgress(0);
+
             self.isLoading = true;
             self.currentIterationId = iteration.ObjectID;
             self.currentIterationName = iteration.Name;
             self._setTitle(iteration.Name);
+            msg.updateProgress(0.1);
             self._setIterationDetails(iteration.ObjectID);
-
+            msg.updateProgress(0.4);
             var $stories = $("#userStoryFilter > .userstoryfilter");
             $stories.empty();
+            msg.updateProgress(0.5);
 
             self._createStandardStorys();
+            msg.updateProgress(0.6);
 
             setTimeout(function () {
                 self._retrievePlan(iteration.Name);
+                msg.updateProgress(0.8);
                 self.ResizeColumnWidths();
-                self.isLoading = false;
+                msg.updateProgress(0.9);
+                setTimeout(function () {
+                    self.isLoading = false;
+                    msg.close();
+                }, 2000);
             }, 3000);
         },
 
@@ -1291,20 +1309,97 @@
                                 var plan = undefined;
                                 try { plan = JSON.parse(res.c_PlanDetails.decode()); } catch (e) { plan = undefined; };
                                 if (plan) {
-                                    $(plan.tasks).each(function (i, v) {
-                                        var element = $(".cardboard[data-task-id='" + v["id"] + "']");
-                                        if (element && element.length == 1) {
-                                            $($('#' + v["assigned-time"]).find(".col").get(v["assigned-day"])).append(element.detach());
+                                    var $messages = $("#iterationMessages");
+                                    if (plan.iterationId != self.currentIterationId) {
+                                        $messages.html("Iteration Details may be out of date - please refresh page.").fadeIn();
+                                    }
+                                    if (plan.startDate && plan.endDate) {
+                                        if (new Date(plan.startDate) != new Date($("#tblCalender").data("start-date")) ||
+                                            new Date(plan.endDate) != new Date($("#tblCalender").data("end-date"))) {
+                                            $messages.html("Iteration dates have changed since last save.").fadeIn();
                                         }
-                                    });
-                                    $(plan.notes).each(function (i, v) {
-                                        $($("#tblCalender").find('textarea').get(v.index)).val(v.note);
-                                    });
+                                    }
+                                    if (plan.tasks) {
+                                        $(plan.tasks).each(function (i, v) {
+                                            var element = $(".cardboard[data-task-id='" + v["id"] + "']");
+                                            if (element && element.length == 1) {
+                                                $($('#' + v["assigned-time"]).find(".col").get(v["assigned-day"])).append(element.detach());
+                                            }
+                                        });
+                                    }
+                                    if (plan.notes) {
+                                        $(plan.notes).each(function (i, v) {
+                                            $($("#tblCalender").find('textarea').get(v.index)).val(v.note);
+                                        });
+                                    }
+                                    if (plan.days) {
+                                        $(plan.days).each(function (i, v) {
+                                            var $day = $("#holidays > .col[data-date='" + v.date + "']");
+                                            if ((v.holiday && !$day.hasClass("highlight")) ||
+                                                (!v.holiday && $day.hasClass("highlight"))) {
+                                                $day.triggerHandler('click')
+                                            }
+                                        });
+                                    }
+                                    if (plan.taskStatusChecks) {
+                                        $("#taskStatusChecks").find("#Chk_CustomStateTask_Completed").prop('checked', plan.taskStatusChecks.completed).triggerHandler('click');
+                                        $("#taskStatusChecks").find("#Chk_CustomStateTask_In-Progress").prop('checked', plan.taskStatusChecks.inProgress).triggerHandler('click');
+                                        $("#taskStatusChecks").find("#Chk_CustomStateTask_Defined").prop('checked', plan.taskStatusChecks.defined).triggerHandler('click');
+                                    }
                                 }
                             }
 
-                            self.ResizeColumnWidths();
-                            self.CalculateTallies();
+                            self.CalculateTallies(function () {                                
+
+                                if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
+
+                                    var differences = [];
+                                    for (i = 0; i < data.QueryResult.TotalResultCount; i++) {
+                                        var res1 = data.QueryResult.Results[i];
+                                        if (!res1.c_DueDate) {
+                                            continue;
+                                        }
+
+                                        var dueDate = new Date(res1.c_DueDate);
+                                        var $day = $.grep($("#holidays > .col"), function (v, i) {
+                                            return new Date($(v).data("date")).toDateString() === dueDate.toDateString() // check same day
+                                        })
+
+                                        if (!($day && $day.length == 1)) {
+                                            continue;
+                                        }
+                                        $day = $day[0];
+
+                                        var $element = $(".cardboard[data-task-id='" + res1.ObjectID + "']");
+                                        var time = dueDate.getHours() == 17 ? "afternoon" : dueDate.getHours() == 13 ? 'lunch' : "morning";
+
+                                        if (new Date($element.data("assigned-date")).toDateString() != dueDate.toDateString()
+                                            || $element.data("assigned-time") != time) {                                         
+                                            differences.push(
+                                                {
+                                                    day: $day,
+                                                    time: time,
+                                                    element: $element
+                                                });
+                                        }
+                                    }
+
+                                    if (differences.length > 0) {
+                                        self._Confirmation("Update?", differences.length + " task(s) have been modified outside of the planning board.<br/><br/>Do you want to update the plan based on the new information?<br/>The updated tasks will be moved to the morning of the new date.", function () {
+                                            $(differences).each(function (i, v) {
+                                                var index = $("#holidays > .col").index(v.day);
+                                                if (index > -1) {
+                                                    $($('#' + v.time).find(".col").get(index)).append(v.element.detach());
+                                                    v.element.fadeOut("fast").delay(100).fadeIn("fast").fadeOut("fast").delay(100).fadeIn("fast").fadeOut("fast").delay(100).fadeIn("fast");
+                                                }
+                                            });
+
+                                            self.ResizeColumnWidths();
+                                            self.CalculateTallies();
+                                        });
+                                    }
+                                }
+                            });
                         });
                     }
                 });
@@ -1312,8 +1407,6 @@
         },
 
         this.ResizeColumnWidths = function () {
-            //console.log("Start: ResizeColumnWidths" + (new Date()));
-
             $("#Messages").fadeOut().text("Resizing column widths - please wait").fadeIn();
 
             setTimeout(function () {
@@ -1322,7 +1415,6 @@
 
                 if (self.lastResize && self.lastResize - new Date() < 5000) {
                     $("#Messages").fadeOut("slow").text("");
-                    //console.log("End: ResizeColumnWidths (via return)" + (new Date()));
                     return;
                 }
 
@@ -1346,14 +1438,11 @@
                 $(".col.highlight").animate({ 'width': 20 }, "fast");
 
                 $("#Messages").fadeOut("slow").text("");
-                //console.log("End: ResizeColumnWidths" + (new Date()));
-
             }, 50);
         },
 
         this.ResizeColumnHeight = function () {
             $("#Messages").fadeOut().text("Resizing column heights - please wait").fadeIn();
-            //console.log("Start: ResizeColumnHeight" + (new Date()));
 
             setTimeout(function () {
 
@@ -1376,18 +1465,19 @@
                 }).get()));
 
                 $("#Messages").fadeOut("slow").text("");
-                //console.log("End: ResizeColumnHeight" + (new Date()));
 
             }, 50);
         }
 
-        this.CalculateTallies = function () {
+        this.CalculateTallies = function (cb) {
             setTimeout(function () {
                 var $calendar = $("#tblCalender");
                 var $overall = $("#overallTally");
-                self.ResizeColumnHeight();
                 var tallies = {};
                 var daysCount = $calendar.find("#tally > .div-table-col-tally").length;
+
+                self.ResizeColumnHeight();
+
                 $calendar.refresh().find('.dragger:not(.hidden)').each(function () {
                     var name = $(this).find(".whoDoesIt").text().trim();
                     if (name == "" || name == "?") {
@@ -1462,6 +1552,9 @@
                     app.FilterByAssignedTo(name);
                 });
 
+                if (cb) {
+                    cb();
+                }
             }, 50);
         },
 
