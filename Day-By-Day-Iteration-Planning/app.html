@@ -674,6 +674,16 @@
         this.lastResize = null,
         this.interval = null,
 
+        this.RankCharIndex = ['!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '<', '=', '>', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '[', '\\', ']', '^', '_', '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~'],
+
+        this.DecodeRankToLong = function (dragAndDropRank) {
+            var total = 0;
+            for (var i = 0; i < 6; i++) {
+                total += self.RankCharIndex.indexOf(dragAndDropRank[i]) * Math.pow(94, i);
+            }
+            return total;
+        },
+
         this.onDashboardIterationChanged = function (iteration) {
             if (!self.templatesLoaded) {
                 self._LoadTemplates();
@@ -956,13 +966,12 @@
         this._checkIfAllUserStoriesHaveTasks = function (iterationId) {
             setTimeout(function () {
 
-                var url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((ScheduleState%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+                var url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID,Rank&start=1&pagesize=200&query=((ScheduleState%20!%3D%20%22Completed%22)%20And%20(Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
 
                 var $messages = $("#iterationMessages");
                 var $stories = $("#userStoryFilter > .userstoryfilter");
 
                 $.getJSON(url, function (data) {
-                    $messages.empty();
                     if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
 
                         var total = 0;
@@ -977,10 +986,22 @@
                             $story.attr("data-user-story-id", res.ObjectID);
                             $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('" + res.ObjectID + "')");
                             $story.find("button").attr("onclick", "app.AddTasksToStory('" + res.ObjectID + "');");
+
+                            $story.attr("data-rank", self.DecodeRankToLong(res.DragAndDropRank));
+
                             if ($stories.find(".listitemstory[data-user-story-id='[" + res.ObjectID + "']").length == 0) {
                                 $stories.append($story);
                             }
                         }
+
+                        $storyItems = $stories.children('.listitemstory');
+                        $storyItems.sort(function (a, b) {
+                            var a = parseFloat(a.getAttribute('data-rank')), b = parseFloat(b.getAttribute('data-rank'));
+                            return a > b ? 1 : a < b ? -1 : 0;
+                        });
+                        $storyItems.detach().appendTo($stories);
+
+                        $messages.empty();
                         if (total == 1) {
                             $messages.html("<a target='_blank' href='https://rally1.rallydev.com/#/teamplan'>There is " + total + " story included in the iteration that does not have associated tasks.</a>");
                         } else if (total > 1) {
@@ -1349,7 +1370,7 @@
                                 }
                             }
 
-                            self.CalculateTallies(function () {                                
+                            self.CalculateTallies(function () {
 
                                 if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
 
@@ -1374,7 +1395,7 @@
                                         var time = dueDate.getHours() == 17 ? "afternoon" : dueDate.getHours() == 13 ? 'lunch' : "morning";
 
                                         if (new Date($element.data("assigned-date")).toDateString() != dueDate.toDateString()
-                                            || $element.data("assigned-time") != time) {                                         
+                                            || $element.data("assigned-time") != time) {
                                             differences.push(
                                                 {
                                                     day: $day,
@@ -1385,7 +1406,7 @@
                                     }
 
                                     if (differences.length > 0) {
-                                        self._Confirmation("Update?", differences.length + " task(s) have been modified outside of the planning board.<br/><br/>Do you want to update the plan based on the new information?<br/>The updated tasks will be moved to the morning of the new date.", function () {
+                                        self._Confirmation("Update?", differences.length + " task(s) have been modified outside of the planning board.<br/><br/>Do you want to update the plan based on the new information?.", function () {
                                             $(differences).each(function (i, v) {
                                                 var index = $("#holidays > .col").index(v.day);
                                                 if (index > -1) {
