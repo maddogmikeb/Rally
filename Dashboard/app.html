@@ -1,257 +1,210 @@
-<script src="/apps/1.26/sdk.js"></script>
+<meta name="Name" content="App: Dashboard Carousel" />
+<meta name="Version" content="2016.03.31" />
+<meta name="Vendor" content="MaddogMikeB" />
+
+<script src="/apps/2.0/sdk.js"></script>
 <script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
 
-<style>
-    
-     .btn {
-        background: rgb(0, 169, 224);
-        background-image: -webkit-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
-        background-image: -moz-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
-        background-image: -ms-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
-        background-image: -o-linear-gradient(top, rgb(0, 169, 224), rgb(0, 169, 224));
-        background-image: linear-gradient(to bottom, rgb(0, 169, 224), rgb(0, 169, 224));
-        -webkit-border-radius: 3;
-        -moz-border-radius: 3;
-        border-radius: 3px;
-        color: #ffffff;
-        padding: 5px 10px 5px 10px;
-        text-decoration: none;
-        margin-right: 10px;
-    }
-
-        .btn:hover {
-            background: #3cb0fd;
-            background-image: -webkit-linear-gradient(top, #3cb0fd, #3498db);
-            background-image: -moz-linear-gradient(top, #3cb0fd, #3498db);
-            background-image: -ms-linear-gradient(top, #3cb0fd, #3498db);
-            background-image: -o-linear-gradient(top, #3cb0fd, #3498db);
-            background-image: linear-gradient(to bottom, #3cb0fd, #3498db);
-            text-decoration: none;
+<script type="text/x-template" id="fullSizeStyle">
+    <style>
+        .fullSize {
+            z-index: 100000 !important;
+            position: fixed !important;
+            top: 2px !important;
+            left: 9px !important;
+            bottom: 0 !important;
+            right: 0 !important;
+            overflow: auto !important;
+            height: 100% !important;
+            width: 100% !important;
+            margin: 0 !important;
         }
+    </style>
+</script>
 
-        .btn:link {
-            color: white;
-        }
-
-        .btn:visited {
-            color: white;
-        }
-
-    #delayValue {
-        background-position: 0px 0px;
-        height: 22px;
-        width: 180px;
-        perspective-origin: 90px 11px;
-        transform-origin: 90px 11px;
-        background: rgb(255, 255, 255) none repeat-x scroll 0px 0px / auto padding-box border-box;
-        border-top: 1px solid rgb(126, 173, 217);
-        border-right: 1px solid rgb(126, 173, 217);
-        border-bottom: 1px solid rgb(126, 173, 217);
-        border-left: 1px solid rgb(126, 173, 217);
-        font: normal normal normal normal 11px / 17px NotoSans, Helvetica, Arial;
-        padding: 1px 3px 2px;
-        width: 50px;
-        text-align: right;
-    }
-
-</style>
-
-<body>
-    <div id="controls" style="position: relative; top: -30px;">
-        <button onclick="javascript: app.ShowDashboard();" class="btn">
-            View Dashboard
-        </button>
-        <span style="margin-left: 5px;">
-            Delay (secs): <input class="x-btn-text" id="delayValue" type="number" value="30">
-        </span>
-    </div>
-    <div id="output" style="position: relative; top: -30px;">
-        Loading...
-    </div>
-</body>
+<script type="text/x-template" id="glassTemplate">
+    <div tabindex="0" style="top: 0; left: 0; z-index: 99999999998; margin: 0; padding: 0; position: absolute; width: 100%; height: 100%;"></div>
+</script>
 
 <script type="text/javascript">
 
     var RALLY = window.parent.RALLY;
-    var Ext = window.parent.Ext4 || window.parent.Ext;
 
-    $.QueryString = (function (a) {
-        if (a == "") return {};
-        var b = {};
-        for (var i = 0; i < a.length; ++i) {
-            var p = a[i].split('=');
-            if (p.length != 2) continue;
-            b[p[0]] = decodeURIComponent(p[1].replace(/\+/g, " "));
-        }
-        return b;
-    })(window.location.search.substr(1).split('&'));
-
-    $.setIntervalAndExecute = (function (fn, t) {
-        fn();
-        return (setInterval(fn, t));
-    });
-
-    var app = new (function () {
-
-        this.interval = null,
-        this.cancelling = false,
-
-        this.onLoad = function () {
-            var $thisApp = this;
-
-            if ($thisApp.cancelling) {
-                $thisApp.Revert();
-                return;
+    Ext.define('DashboardCarouselApp', {
+        extend: 'Rally.app.App',
+        componentCls: 'app',
+        settingsScope: 'app',
+        config: {
+            defaultSettings: {
+                Delay: 30
             }
-
-            // also that the layout is a single column
-            if (RALLY.activePage.dashboardConfig.dashboardLayout.name != "SINGLE") {
-                $('#output').empty().html('<p>Dashboard must be a single column layout.<\/p>');
-                $('#controls').hide();
-                return;
-            }
-
-            var panels = $($.grep($(RALLY.activePage.dashboardPanels), function (panel, index) {
-                return (!(RALLY.activePage.panelDefinitions[panel.panelDefOid].typeName == "html" && $.QueryString["panelOid"] == panel.oid)); // skip this app
-            }));
-
-            // check if any panels other than this
-            if (panels.length == 0) {
-                $('#output').empty().html('<p>No Apps to show as dashboard<\/p>');
-                $('#controls').hide();
-                return;
-            }
-
-            $('#output').empty().html('<p>Apps to show as dashboards: <ul>');
-            panels.each(function (index, panel) {
-                $('#output').append('<li>' + (panel.panelConfigs.title ? panel.panelConfigs.title : panel.panelDef.title) + '<\/li>');
-            });
-            $('#output').append('<\/ul><\/p>');
         },
 
-        this._showPanel = function (index, panel) {
-            var $thisApp = this;
+        getSettingsFields: function () {
+            return [{
+                name: 'Delay',
+                xtype: 'rallynumberfield'
+            }];
+        },
 
+        launch: function () {
+            self = this;
+            this.interval = null;
+            this.cancelling = false;
+
+            this.controls = this.add(Ext.create('Ext.Button', {
+                text: 'View Dashboard',
+                handler: function () {
+                    self.ShowDashboard();
+                }
+            }));
+
+            this.output = Ext.DomHelper.append(Ext.getBody(), { tag: 'div', id: 'output', style: 'padding: 10px;' });
+            Object.defineProperty(this.output, "html", {
+                get: function () { return this.innerHTML },
+                set: function (h) { this.innerHTML = h }
+            });
+
+            this.onLoad();
+
+            this.add(Ext.create('Ext.form.Panel', {
+                contentEl: 'output'
+            }));
+        },
+
+        _getPanels: function (includeCurrentPanel) {
+            if (includeCurrentPanel) {
+                return RALLY.activePage.dashboard.panelPanels;
+            }
+            var panels = Ext.partition(RALLY.activePage.dashboardPanels, function (panel) {
+                return Rally.getApp().getAppId() !== panel.oid.toString();
+            })[0];
+            return panels;
+        },
+
+        onLoad: function () {
+            if (self.cancelling) {
+                self.Revert();
+                return;
+            }
+
+            this.output.html = 'Loading...';
+
+            Rally.ui.notify.Notifier.showStatus({ message: "Loading...", timeout: 5000 });
+
+            if (RALLY.activePage.dashboardConfig.dashboardLayout.name != "SINGLE") {
+                this.output.html = 'Dashboard must be a single column layout.';
+                this.controls.hide();
+            }
+            else {
+                var panels = self._getPanels();
+                if (panels.length == 0) {
+                    this.output.html = 'No Apps to show as dashboard';
+                    this.controls.hide();
+                } else {
+                    this.output.html = 'Apps to show as dashboards:';
+                    var list = Ext.DomHelper.append(this.output, { tag: 'ul' });
+                    Ext.Array.each(panels, function (panel) {
+                        Ext.DomHelper.append(list, { tag: 'li', html: panel.panelConfigs.title ? panel.panelConfigs.title : panel.panelDef.title });
+                    });
+                }
+            }
+
+            Rally.ui.notify.Notifier.hide();
+        },
+
+        _setIntervalAndExecute : (function (fn, t) {
+            fn();
+            return (setInterval(fn, t));
+        }),
+
+        _showPanel: function (index, panel) {
             var parentDoc = $(window.parent.document);
-
-            var delay = parseInt($("#delayValue").val()) * 1000;
-
             setTimeout(function () {
-                if ($thisApp.cancelling) {
-                    $thisApp.Revert();
+                if (self.cancelling) {
+                    self.Revert();
                     return;
                 }
-
                 $(RALLY.activePage.dashboard.panelPanels).each(function (index, uipanel) {
-                    if ($thisApp.cancelling) {
-                        $thisApp._goBackFromFullScreen(parentDoc.find("#" + uipanel.id));
-                        $thisApp.Revert();
+                    if (self.cancelling) {
+                        self._goBackFromFullScreen(parentDoc.find("#" + uipanel.id));
+                        self.Revert();
                         return;
                     }
                     if (panel.oid == uipanel.oid) {
-                        $thisApp._goFullScreen(parentDoc.find("#" + uipanel.id));
+                        self._goFullScreen(parentDoc.find("#" + uipanel.id));
                     } else {
                         parentDoc.find("#" + uipanel.id).fadeOut();
                     }
                 });
-
-            }, delay * (index));
+            }, self.getSetting("Delay") * 1000);
         },
 
-        this.ShowDashboard = function () {
-            var $thisApp = this;
-
-            if ($thisApp.cancelling) {
-                $thisApp.Revert();
+        ShowDashboard: function () {
+            if (self.cancelling) {
+                self.Revert();
             }
-            $thisApp.cancelling = false;
 
-            var delay = parseInt($("#delayValue").val()) * 1000;
-
-            if ($thisApp.interval) clearInterval($thisApp.interval);
+            self.cancelling = false;
+            if (self.interval) {
+                clearInterval(self.interval);
+            }
 
             var parentDoc = $(window.parent.document.body);
             parentDoc.find("#header, #footer, .titlebar, .x-tool").fadeOut();
 
-            $(RALLY.activePage.dashboard.panelPanels).each(function (index, uipanel) {
+            $(self._getPanels(true)).each(function (index, uipanel) {
                 parentDoc.find("#" + uipanel.id).fadeOut();
             });
 
-            parentDoc.append('<div id="dashboard_glass" tabindex="0" style="top:0px; left:0px; z-index:99999999998; margin: 0; padding: 0; position: absolute; width: 100%; height: 100%;">&nbsp;<\/div>');   // glass to stop input
-            parentDoc.find("#dashboard_glass").keydown(function (e) {
-                if (e.keyCode == 27) { // escape key maps to keycode `27`
-                    $thisApp.Revert();
+            parentDoc.find("head").append($($("#fullSizeStyle").html()).clone());
+
+            self.glass = parentDoc.append($($("#glassTemplate").html()).clone()).keydown(function (e) {
+                if (e.keyCode == 27) { // escape key
+                    self.Revert();
                 }
             }).focus();
 
-            var panels = $($.grep($(RALLY.activePage.dashboardPanels), function (panel, index) {
-                return (!(RALLY.activePage.panelDefinitions[panel.panelDefOid].typeName == "html" && $.QueryString["panelOid"] == panel.oid)); // skip this app
-            }));
-
-            $thisApp.interval = $.setIntervalAndExecute(function () {
-                $(panels).each(function (i, v) { $thisApp._showPanel(i, v); });
-            }, panels.length * delay);
+            $(self._getPanels()).each(function (i, v) {
+                self.interval = self._setIntervalAndExecute(function () {
+                    self._showPanel(i, v);
+                }, self.getSetting("Delay") * 1000);
+            });
         },
 
-        this.Revert = function () {
-            var $thisApp = this;
-
+        Revert: function () {
             setTimeout(function () {
-                $thisApp.cancelling = true;
-
-                if ($thisApp.interval) clearInterval($thisApp.interval);
-
+                self.cancelling = true;
+                if (self.interval) clearInterval(self.interval);
                 var parentDoc = $(window.parent.document);
                 parentDoc.find("#header, #footer, .titlebar, .x-tool").fadeIn();
-
-                $(RALLY.activePage.dashboard.panelPanels).each(function (index, uipanel) {
+                $(self._getPanels(true)).each(function (index, uipanel) {
                     setTimeout(function () {
-                        $thisApp._goBackFromFullScreen(parentDoc.find("#" + uipanel.id));
+                        self._goBackFromFullScreen(parentDoc.find("#" + uipanel.id));
                     }, 1);
                 });
-
-                parentDoc.find("#dashboard_glass").remove();
-
-                $thisApp.cancelling = false;
+                self.glass.remove();
+                self.cancelling = false;
             }, 10);
         },
 
-        this._goBackFromFullScreen = function (element) {
-            var $thisApp = this;
-
-            $(element).attr("style", $(element).attr("oldstyle")).fadeIn();
+        _goBackFromFullScreen: function (element) {
+            $(element).removeClass("fullSize");
         },
 
-        this._goFullScreen = function (element) {
-            var $thisApp = this;
-
-            $(element).attr("oldstyle", $(element).attr("style"));
-
-            if ($thisApp.cancelling) {
-                $thisApp.Revert();
+        _goFullScreen: function (element) {
+            if (self.cancelling) {
+                self.Revert();
                 return;
             }
-
-            $(element)
-               .css("z-index", 100000)
-               .css("position", "fixed")
-               .css("top", "2px !important;")
-               .css("left", "9px")
-               .css("bottom", "0")
-               .css("right", "0")
-               .css("overflow", "auto")
-               .css("height", "100%")
-               .css("width", "100%")
-               .css("margin", "0")
-               .fadeIn();
+            $(element).addClass("fullSize").fadeIn();
         }
-    })();
+    });
 
-    rally.addOnLoad(function () {
-        $("#appHeader").remove();
-        if (app) {
-            app.onLoad();
-        }
+    Rally.onReady(function () {
+        Rally.launchApp('DashboardCarouselApp', {
+            name: 'Dashboard Carousel'
+        });
     });
 
 </script>
