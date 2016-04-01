@@ -1,7 +1,7 @@
-<script type="text/javascript" src="/apps/1.26/sdk.js"></script>
+<script src="/apps/2.0/sdk.js"></script>
 <script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
 
-<script type="text/template" id="noTaskUserStoryTemplate">
+<script type="text/x-template" id="noTaskUserStoryTemplate">
     <tr class="x4-component row-header x4-component-default x4-border-box">
         <td class="row-header-cell" colspan="3">
             <div class="row-header-title">
@@ -47,7 +47,39 @@
         return count;
     };
 
+    (function ($) {
+        $.fn.contrastingText = function () {
+            var el = this;
+            var transparent = function (c) {
+                var m = c.match(/[0-9]+/g);
+                if (m !== null) {
+                    return !!m[3];
+                }
+                else return false;
+            };
+            while (transparent(el.css('background-color'))) {
+                el = el.parent();
+            }
+            parts = el.css('background-color').match(/[0-9]+/g);
+            this.lightBackground = !!Math.round(
+                (
+                    parseInt(parts[0], 10) + // red
+                    parseInt(parts[1], 10) + // green
+                    parseInt(parts[2], 10) // blue
+                ) / 765 // 255 * 3, so that we avg, then normalise to 1
+            );
+            if (this.lightBackground) {
+                this.css('color', 'black');
+            } else {
+                this.css('color', 'white');
+            }
+            return this;
+        };
+    }(jQuery));
+
     var app = new (function () {
+
+        self = this,
 
         this.isLoading = false,
         this.curIterationId = null,
@@ -55,46 +87,55 @@
         this.$noTaskUserStoryTemplate = null,
 
         this.onDashboardIterationChanged = function (iteration) {
-            var $thisApp = this;
 
-            if (!$thisApp.templatesLoaded) {
-                $thisApp._LoadTemplates();
+            var msg = Ext.Msg.progress('Loading', 'Loading iteration details...');
+            msg.updateProgress(0);
+
+            if (!self.templatesLoaded) {
+                self._LoadTemplates();
             }
+            msg.updateProgress(0.1);
 
-            $thisApp.curIterationId = iteration.ObjectID;
+            self.curIterationId = iteration.ObjectID;
+            msg.updateProgress(0.2);
 
-            $thisApp._setTitle(iteration.Name);
-            $thisApp._setIterationDetails(iteration.ObjectID);
+            self._setTitle(iteration.Name);
+            msg.updateProgress(0.3);
+
+            self._setIterationDetails(iteration.ObjectID);
+            msg.updateProgress(0.4);
+
             setTimeout(function () {
-                $thisApp._checkIfAllUserStoriesHaveTasks(iteration.ObjectID);
+                self._checkIfAllUserStoriesHaveTasks(iteration.ObjectID);
+                msg.updateProgress(0.5);
+
                 setTimeout(function () {
-                    $thisApp._updateStories(iteration.Name);
-                    isLoading = false;
+                    msg.updateProgress(0.75);
+                    self._updateStories(iteration.Name);
+                    msg.updateProgress(0.9);
+                    setTimeout(function () {
+                        isLoading = false;
+                        msg.close();
+                    }, 2000);
                 }, 1500);
             }, 1000);
         },
 
         this._LoadTemplates = function () {
-            var $thisApp = this;
-
             if ($("#noTaskUserStoryTemplate").length == 0) {
                 throw new DOMException("Missing Template");
             }
-            $thisApp.$noTaskUserStoryTemplate = $($("#noTaskUserStoryTemplate").html());
+            self.$noTaskUserStoryTemplate = $($("#noTaskUserStoryTemplate").html());
         },
 
         this._setTitle = function (iterationName) {
-            var $thisApp = this;
-
             $(window.parent.document)
                 .find(".title")
                 .css("font-size", "24pt")
-                .html(RALLY.activePage.context.project.Name + " - " + (iterationName || "Unscheduled"));
+                .html(RALLY.activePage.context.project.Name + "<br/><span style='font-size: 16pt;'>" + (iterationName || "Unscheduled") + "</span>");
         },
 
         this._ShowUnscheduledIterationsDetails = function () {
-            var $thisApp = this;
-
             var $title = $(window.parent.document).find(".title");
 
             if (!$title) return;
@@ -113,8 +154,6 @@
         },
 
         this._ShowScheduledIterationDetails = function (result) {
-            var $thisApp = this;
-
             var $title = $(window.parent.document).find(".title");
             if (!$title) return;
             if ($title.length == 0) return;
@@ -130,7 +169,7 @@
 
             $details.empty();
             $details.attr("onclick", "window.open('https://rally1.rallydev.com/#/timeboxes');");
-            
+
             if (result.Theme) {
                 $details.append("<span style='padding: 5px'>Theme: <b>" + result.Theme + "</b>");
             }
@@ -151,40 +190,40 @@
         },
 
         this._setIterationDetails = function (iterationId) {
-            var $thisApp = this;
-
             if (!iterationId) {
-                $thisApp._ShowUnscheduledIterationsDetails();
-
+                self._ShowUnscheduledIterationsDetails();
             } else {
-
-                var url = "https://rally1.rallydev.com/slm/webservice/v2.x/Iteration?fetch=true&includePermissions=true&query=(ObjectId = \"" + iterationId + "\")";
-
+                var url = "/slm/webservice/v2.x/Iteration?fetch=true&includePermissions=true&query=(ObjectId = \"" + iterationId + "\")";
                 $.getJSON(url, function (data) {
                     if (data && data.QueryResult && data.QueryResult.TotalResultCount == 1) {
                         var res = data.QueryResult.Results[0];
-                        $thisApp._ShowScheduledIterationDetails(res);
+                        self._ShowScheduledIterationDetails(res);
                     }
                 });
-
             }
         },
 
         this._updateStories = function (iterationName) {
-            var $thisApp = this;
+            var $portlet = $(window.parent.document).find(".x-panel.x-portlet");
 
-            $(window.parent.document).find(".x-panel.x-portlet").each(function (i, v) {
+            var msg = Ext.Msg.progress('Loading', 'Loading user story details...');
+            msg.updateProgress(0);
+            var totalCount = $portlet.length - 1;
+
+            $portlet.each(function (i, v) {
                 if ($(v).find("div.customboard").length > 0 && $(v).find(".fixed-header-card-board-body-container").length > 0) {
                     $(v).find(".row-header-cell").each(function (i, v) {
-                        $thisApp._updateStoryDetails($(v));
+                        self._updateStoryDetails($(v));
                     });
                 }
+
+                msg.updateProgress(i / totalCount);
+            }).promise().done(function () {
+                setTimeout(function () { msg.close(); }, 2000);
             });
         },
 
         this._updateStoryDetails = function ($rowheader) {
-            var $thisApp = this;
-
             if ($rowheader.find(".formatted-id-link").length == 0) {
                 return;
             }
@@ -203,10 +242,11 @@
 
             var objectId = link.substring(link.indexOf(replacer) + replacer.length);
 
+            $rowheader.css("overflow", "hidden");
             $rowheader.find(".userstorydetails").remove();
             $rowheader.append("<div class='userstorydetails' style='float: left; width: 100%; height: 12pt;'>Loading details for <b>" + USid + "</b>...</div>");
 
-            var url = "https://rally1.rallydev.com/slm/webservice/v2.0/artifact?fetch=true&query=(ObjectId = \"" + objectId + "\")";
+            var url = "/slm/webservice/v2.0/artifact?fetch=DisplayColor,Feature,Milestones,PlanEstimate,PassingTestCaseCount,TestCaseCount,DefectStatus,Defects,c_StoryboardDigitalWagering,ScheduleState,Blocked,BlockedReason,Ready,Owner,Tags&query=(ObjectId = \"" + objectId + "\")";
 
             $.getJSON(url, function (data) {
                 var details = null;
@@ -217,6 +257,20 @@
 
                     if (result.Feature && result.Feature._refObjectName) {
                         details.append("<span style='padding: 5px'>Feature: <b>" + result.Feature._refObjectName + "</b>");
+                    }
+
+                    if (result.Milestones && result.Milestones._tagsNameArray) {
+                        if (result.Milestones._tagsNameArray.length > 0) {
+                            details.append("<span style='padding: 5px;'>Milestones:");
+                            $(result.Milestones._tagsNameArray).each(function (i, v) {
+                                details.append("<span class='milestone' style='padding-right: 5px; color: " + v.DisplayColor + "'>" + v.Name + "</span>");
+                            });
+                            details.append("</span>");
+                        }
+                    }
+
+                    if (result.PlanEstimate) {
+                        details.append("<span style='padding: 5px;'>Points: <b>" + result.PlanEstimate + "</b></span>");
                     }
 
                     details.append("<span style='padding: 5px;'>Passing Tests: <b>" + result.PassingTestCaseCount + "/" + result.TestCaseCount + "</b></span>");
@@ -237,9 +291,11 @@
                         details.append("<span style='padding: 5px'>Blocked Reason: <b>" + result.BlockedReason + "</b></span>");
                     } else if (result.Ready) {
                         $rowheader.css("background-color", "#8dc63f");
+                    } else if (result.DisplayColor) {
+                        $rowheader.css("background-color", result.DisplayColor);
                     } else {
                         $rowheader.css("background-color", "");
-                    }
+                    }                    
 
                     if (result.Owner && result.Owner._refObjectName) {
                         details.append("<span style='padding: 5px;'>Owner: <b>" + result.Owner._refObjectName + "</b></span>");
@@ -252,7 +308,6 @@
                         });
                         details.append("</b></span>");
                     }
-
                 } else {
                     details = $rowheader.find(".userstorydetails");
                     details.empty().css("padding", "5px");
@@ -262,12 +317,22 @@
                 if (details) {
                     details.fadeIn("fast");
                 }
+            }).done(function () {
+                var $board = $rowheader.closest("[id^='rallycardboard-']");
+                var rows = Ext.getCmp($board[0].id).getRows();
+                Ext.Array.each(rows, function (row) {
+                    row.collapse();
+                });
+
+                $board.find(".row-header").each(function (i, v) {
+                    $(v).find("*:not(a):not(.milestone)").each(function (i, v1) {
+                        $(v1).contrastingText();
+                    });
+                });
             });
         }
 
         this._findBoardByTitle = function ($panelportlet) {
-            var $thisApp = this;
-
             var boardTitle = $panelportlet.find(".x-panel-header-text").text();
 
             for (var i = 0; i < RALLY.activePage.dashboardPanels.length; i++) {
@@ -276,13 +341,10 @@
                     return board;
                 }
             }
-
             return null;
         },
 
         this._getQueryFromBoard = function (board) {
-            var $thisApp = this;
-
             if (!board) {
                 return null;
             }
@@ -295,24 +357,30 @@
         },
 
         this._checkIfAllUserStoriesHaveTasks = function (iterationId) {
-            var $thisApp = this;
 
             setTimeout(function () {
-                $(window.parent.document).find(".x-panel.x-portlet").each(function (i, v) {
+
+                var $portlet = $(window.parent.document).find(".x-panel.x-portlet");
+
+                var msg = Ext.Msg.progress('Loading', 'Loading user story details...');
+                msg.updateProgress(0);
+                var totalCount = $portlet.length - 1;
+
+                $portlet.each(function (i, v) {
 
                     var $storyTable = $(v).find(".fixed-header-card-board-body-container > table > tbody");
                     if ($storyTable.length == 0) {
                         return;
                     }
 
-                    var board = $thisApp._findBoardByTitle($(v));
-                    var query = $thisApp._getQueryFromBoard(board);
+                    var board = self._findBoardByTitle($(v));
+                    var query = self._getQueryFromBoard(board);
 
                     var url;
                     if (query) {
-                        url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((Iteration.ObjectId%20%3D%20%22" + iterationId + "%22) And " + query + ")";
+                        url = "/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((Iteration.ObjectId%20%3D%20%22" + iterationId + "%22) And " + query + ")";
                     } else {
-                        url = "https://rally1.rallydev.com/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
+                        url = "/slm/webservice/v2.0/hierarchicalrequirement?fetch=Tasks,Name,ObjectID,FormattedID&start=1&pagesize=200&query=((Iteration.ObjectId%20%3D%20%22" + iterationId + "%22))";
                     }
 
                     $.getJSON(url, function (data) {
@@ -325,27 +393,30 @@
                                     continue;
                                 }
 
-                                $thisApp.__createNoTaskStoryForStoryResult($storyTable, res);
+                                self._createNoTaskStoryForStoryResult($storyTable, res);
                             }
                         }
+                    }).promise().done(function () {
+                        msg.updateProgress(i / totalCount);
                     });
+                }).promise().done(function () {
+                    setTimeout(function () { msg.close(); }, 2000);
                 });
             }, 50);
         },
 
         this._createNoTaskStoryForStoryResult = function ($storyTable, res) {
-
             var $story;
             if ($storyTable.find("#NoTaskUserStory" + res.ObjectID).length == 1) {
                 $story = $($storyTable.find("#NoTaskUserStory" + res.ObjectID)[0]);
             } else {
-                $story = $thisApp.$noTaskUserStoryTemplate.clone();
+                $story = self.$noTaskUserStoryTemplate.clone();
                 $($story.find("tr")[0]).attr("id", "#NoTaskUserStory" + res.ObjectID);
             }
 
             $story.find("._NoTaskUserStory_Name").html(res.Name);
             $story.find("._NoTaskUserStory_Link").attr("href", "#/" + RALLY.context.projectOid + "d/detail/userstory/" + res.ObjectID);
-            $story.find("._NotaskUserStory_AddNewTask").attr("href", "#/" + RALLY.context.projectOid + "d/detail/task/new?typeDef=25364774067&rankTo=BOTTOM" + "&Iteration=%2Fiteration%2F" + $thisApp.curIterationId + "&Project=%2Fproject%2F" + RALLY.context.projectOid + "&rankScope=%2Fiteration%2F" + $thisApp.curIterationId + "&&WorkProduct=%2Fhierarchicalrequirement%2F" + res.ObjectID);
+            $story.find("._NotaskUserStory_AddNewTask").attr("href", "#/" + RALLY.context.projectOid + "d/detail/task/new?typeDef=25364774067&rankTo=BOTTOM" + "&Iteration=%2Fiteration%2F" + self.curIterationId + "&Project=%2Fproject%2F" + RALLY.context.projectOid + "&rankScope=%2Fiteration%2F" + self.curIterationId + "&&WorkProduct=%2Fhierarchicalrequirement%2F" + res.ObjectID);
             $story.find("._NoTaskUserStory_FormattedID").html(res.FormattedID);
             $storyTable.append($story);
         }
@@ -360,8 +431,7 @@
         }
     }
 
-    rally.addOnLoad(function () {
-        $("#appHeader").remove();
+    Rally.onReady(function () {
         if (app) {
             app.onDashboardIterationChanged(RALLY.activePage.context.timeboxFilter.iteration);
         }
