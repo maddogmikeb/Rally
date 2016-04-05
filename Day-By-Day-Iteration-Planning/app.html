@@ -580,6 +580,9 @@
         var str = this.valueOf();
         return window.atob(str);;
     }
+    String.prototype.startsWith = function (str) {
+        return !this.indexOf(str);
+    }
 
     $.fn.classes = function (callback) {
         var classes = [];
@@ -676,10 +679,6 @@
 
         this.RankCharIndex = ['!', '"', '#', '$', '%', '&', '\'', '(', ')', '*', '+', ',', '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', ';', '<', '=', '>', '?', '@', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '[', '\\', ']', '^', '_', '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '{', '|', '}', '~'],
 
-        this.onLoad = function () {
-            self.onDashboardIterationChanged(RALLY.activePage.context.timeboxFilter.iteration);
-        },
-
         this.DecodeRankToLong = function (dragAndDropRank) {
             var total = 0;
             for (var i = 0; i < 6; i++) {
@@ -721,6 +720,18 @@
             app.CalculateTallies();
         },
 
+        this._randomString = function (length_) {
+            var chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz'.split('');
+            if (typeof length_ !== "number") {
+                length_ = Math.floor(Math.random() * chars.length_);
+            }
+            var str = '';
+            for (var i = 0; i < length_; i++) {
+                str += chars[Math.floor(Math.random() * chars.length)];
+            }
+            return str;
+        },
+
         this.AddCustomTask = function (id, name, duration) {
             var $calendar = $("#tblCalender");
 
@@ -728,8 +739,9 @@
 
             $details = self.$taskTemplate.clone();
             $details.attr("data-checkedIfExists", "true");
-            $details.attr("id", name);
-            $details.attr("data-task-id", id);
+            $details.attr("data-iscustom", "true");
+            $details.attr("id", name + "_" + self._randomString(10));
+            $details.attr("data-task-id", name);
             $details.attr("data-user-story-id", id);
             $details.attr("data-user-name", "Whole Team");
             $details.css("background-color", "red");
@@ -747,7 +759,7 @@
                 app.FilterTasksByUserStory(null);
             }, 50);
 
-            return true;
+            return $details;
         },
 
         this._updateRallyIteration = function (input, successfunc) {
@@ -800,16 +812,27 @@
 
             self._Confirmation("Save?", "Save iteration plan?<br/><br/>Note: You may need to log in again with your rally credentials.", function () {
                 var tasks = [];
+                var standardTasks = [];
                 $("div.cardboard").each(function (i, v) {
                     var $this = $(this);
-                    tasks.push({
-                        "id": $this.data("task-id"),
-                        "assigned-date": new Date($this.data("assigned-date")),
-                        "assigned-day": $this.data("assigned-day"),
-                        "assigned-time": $this.data("assigned-time"),
-                        "assigned-to": $this.data("assigned-to"),
-                        "assigned-estimate": $this.data("assigned-estimate"),
-                    });
+                    if ($this.data("iscustom")) {
+                        standardTasks.push({
+                            "id": $this.data("user-story-id"),
+                            "name": $this.data("task-id"),
+                            "assigned-day": $this.data("assigned-day"),
+                            "assigned-time": $this.data("assigned-time"),
+                            "duration": $this.data("assigned-estimate"),
+                        });
+                    } else {
+                        tasks.push({
+                            "id": $this.data("task-id"),
+                            "assigned-date": new Date($this.data("assigned-date")),
+                            "assigned-day": $this.data("assigned-day"),
+                            "assigned-time": $this.data("assigned-time"),
+                            "assigned-to": $this.data("assigned-to"),
+                            "assigned-estimate": $this.data("assigned-estimate"),
+                        });
+                    }
                 });
 
                 var notes = [];
@@ -843,6 +866,7 @@
                         tasks: tasks,
                         notes: notes,
                         days: days,
+                        standardTasks: standardTasks,
                         taskStatusChecks: taskStatusChecks,
                         iterationId: self.currentIterationId,
                         startDate: new Date($("#tblCalender").data("start-date")),
@@ -853,14 +877,14 @@
                 var plan = { "Iteration": { "c_PlanDetails": planjson.encode() } };
 
                 self._updateRallyIteration(plan, function (data) {
-                    $("#Messages").text("Saved iteration information.").fadeIn().delay(1000).fadeOut("slow");
-                    self._Confirmation("Add discussion notes?", "Do you want to update task discussions with expected completion dates and times? <br/><br/>Note: this may take a little while.", function () {
-                        self._AddTaskComments(function () {
-                            app.Refresh();
-                        });
-                    }, function () {
+                    //self._Confirmation("Add discussion notes?", "Do you want to update task discussions with expected completion dates and times? <br/><br/>Note: this may take a little while.", function () {
+                    self._AddTaskComments(function () {
                         app.Refresh();
                     });
+                    //}, function () {
+                    //  app.Refresh();
+                    //});
+                    $("#Messages").text("Saved iteration information.").fadeIn().delay(1000).fadeOut("slow");
                 });
             },
             function () {
@@ -882,6 +906,9 @@
             $.getJSON("https://rally1.rallydev.com/slm/webservice/v2.0/security/authorize", function (security) {
                 $tasksDiv.each(function (i, v) {
                     var $this = $(this);
+                    if ($this.data("iscustom")) {
+                        return;
+                    }
                     var tskid = $this.data("task-id");
                     var date = new Date($this.data("assigned-date"));
                     var day = $this.data("assigned-day");
@@ -1344,6 +1371,14 @@
                                             $messages.html("Iteration dates have changed since last save.").fadeIn();
                                         }
                                     }
+                                    if (plan.standardTasks) {
+                                        $(plan.standardTasks).each(function (i, v) {
+                                            var element = $(self.AddCustomTask(v["id"], v["name"], v["duration"]));
+                                            if (element && element.length > 0) {
+                                                $($('#' + v["assigned-time"]).find(".col").get(v["assigned-day"])).append(element.detach());
+                                            }
+                                        });
+                                    }
                                     if (plan.tasks) {
                                         $(plan.tasks).each(function (i, v) {
                                             var element = $(".cardboard[data-task-id='" + v["id"] + "']");
@@ -1376,8 +1411,8 @@
 
                             self.CalculateTallies(function () {
 
-                                if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
 
+                                if (data && data.QueryResult && data.QueryResult.TotalResultCount > 0) {
                                     var differences = [];
                                     for (i = 0; i < data.QueryResult.TotalResultCount; i++) {
                                         var res1 = data.QueryResult.Results[i];
@@ -1388,7 +1423,7 @@
                                         var dueDate = new Date(res1.c_DueDate);
                                         var $day = $.grep($("#holidays > .col"), function (v, i) {
                                             return new Date($(v).data("date")).toDateString() === dueDate.toDateString() // check same day
-                                        })
+                                        });
 
                                         if (!($day && $day.length == 1)) {
                                             continue;
@@ -1396,7 +1431,20 @@
                                         $day = $day[0];
 
                                         var $element = $(".cardboard[data-task-id='" + res1.ObjectID + "']");
+
+                                        if (new Date($element.data("assigned-date")).toDateString() == "Invalid Date") {
+                                            continue;
+                                        }
+
                                         var time = dueDate.getHours() == 17 ? "afternoon" : dueDate.getHours() == 13 ? 'lunch' : "morning";
+
+                                        var defaultDate = new Date($("#holidays > .col").first().data("date"));
+                                        var defaultTime = "morning";
+
+                                        if (defaultDate.toDateString() == dueDate.toDateString()
+                                            || defaultTime != time) {
+                                            continue;
+                                        }
 
                                         if (new Date($element.data("assigned-date")).toDateString() != dueDate.toDateString()
                                             || $element.data("assigned-time") != time) {
@@ -1418,12 +1466,12 @@
                                                     v.element.fadeOut("fast").delay(100).fadeIn("fast").fadeOut("fast").delay(100).fadeIn("fast").fadeOut("fast").delay(100).fadeIn("fast");
                                                 }
                                             });
-
-                                            self.ResizeColumnWidths();
-                                            self.CalculateTallies();
                                         });
                                     }
                                 }
+
+                                self.ResizeColumnWidths();
+                                self.CalculateTallies();
                             });
                         });
                     }
@@ -1638,7 +1686,7 @@
             $story.find("span").html(name);
             $story.attr("data-user-story-id", id);
             $story.find("span").attr("onclick", "javascript:app.FilterTasksByUserStory('" + id + "')");
-            $story.find("button").attr("onclick", "app.AddCustomTask('" + id + "', '" + name + "', " + time + ");");
+            $story.find("button").attr("onclick", "app.AddCustomTask('" + id + "', '" + name + "', " + time + "); return true;");
             return $story;
         },
 
@@ -1666,7 +1714,7 @@
     rally.addOnLoad(function () {
         $("#appHeader").remove();
         if (app) {
-            app.onLoad();
+            app.onDashboardIterationChanged(RALLY.activePage.context.timeboxFilter.iteration);
         }
     });
 
