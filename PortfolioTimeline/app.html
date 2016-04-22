@@ -1,0 +1,827 @@
+<meta name="Name" content="App: Portfolio Timeline Extended" />
+<meta name="Version" content="2016.04.18" />
+<meta name="Vendor" content="MaddogMikeB" />
+
+<script src="/apps/2.0/sdk.js"></script>
+<script src="//code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/vis/4.16.0/vis.min.js"></script>
+<link href="//cdnjs.cloudflare.com/ajax/libs/vis/4.16.0/vis.min.css" rel="stylesheet" type="text/css" />
+<script src="//cdnjs.cloudflare.com/ajax/libs/jsrender/0.9.75/jsrender.min.js"></script>
+
+<style type="text/css">
+    body, html {
+        font-family: NotoSans, Helvetica, Arial;
+        font-size: 11px;
+    }
+
+    .vis-time-axis.vis-odd, .vis-labelset .vis-label:nth-child(even),
+    .vis-foreground .vis-group:nth-child(even),
+    .vis-time-axis.vis-foreground .vis-even,
+    .vis-time-axis .vis-grid.vis-saturday,
+    .vis-time-axis .vis-grid.vis-sunday {
+        background: #f5f5f5;
+    }
+
+    .vis-custom-time {
+        cursor: auto;
+    }
+
+    .vis-item .vis-item-overflow {
+        overflow: visible;
+    }
+
+    .vis-item .vis-item-content {
+        top: -5px;
+    }
+
+    .vis-labelset {
+        min-width: 50px;
+        max-width: 350px;
+    }
+
+    .vis-label, .vis-group {
+        min-height: 46px;
+        word-wrap: break-word;
+    }
+
+    .vis-axis, .vis-line {
+        display: none;
+    }
+
+    .vis-top {
+        position: fixed;
+        z-index: 19000;
+        background-color: white;
+    }
+
+    .group-content {
+        overflow: hidden;
+    }
+
+    .timeline-planned {
+        background-color: #FAD200;
+        z-index: 10000;
+        height: 20px;
+    }
+
+    .timeline-actual {
+        background-color: #8DC63F;
+        z-index: 10001;
+        height: 20px;
+        position: relative;
+        top: 23px !important;
+    }
+
+    .group {
+        width: 10px;
+        display: inline-block;
+        position: relative;
+    }
+
+    .toggle {
+        background-image: url(/slm/js-lib/rui/builds/rui/resources/css/images/tree/arrows.gif);
+    }
+
+    .toggle-show {
+        background-position: -21px -5px;
+    }
+
+        .toggle-show:hover {
+            background-position: -53px -5px;
+        }
+
+    .toggle-hide {
+        background-position: -5px -5px;
+    }
+
+        .toggle-hide:hover {
+            background-position: -37px -5px;
+        }
+
+    .tab {
+        position: relative;
+        display: inline-block;
+    }
+
+    .tab0 {
+        left: -18px;
+    }
+
+    .tab1 {
+        left: 0px;
+    }
+
+    .tab2 {
+        left: 18px;
+    }
+
+    .tab3 {
+        left: 36px;
+    }
+
+    .tab4 {
+        left: 54px;
+    }
+
+    .TODAY-MILESTONE {
+        background: repeating-linear-gradient( 45deg, red, red 10px, white 10px, white 20px ) !important;
+    }
+</style>
+
+<body id="main">
+    <div id="appBody" style="height: auto; min-height: 5000px;">Loading...</div>
+</body>
+
+<footer>
+    <script type="text/x-jsrender" id="groupTemplate">
+        <div class="tab tab{{:level}}" data-id="{{:id}}" data-level="{{:level}}" data-parent="{{:parent}}" data-breadcrumb="{{:breadcrumb}}">
+            <span style="background-color: {{:color}}; width: 10px; height: 10px; display: inline-block;">&nbsp;</span>
+            {{if hasChildren}}
+            <img src="/slm/js-lib/ext/4.2.2/resources/themes/images/default/tree/s.gif" class="{{:className}} toggle toggle-hide" data-show="{{:hasChildren}}" onclick="javascript:ToggleGroupElement(this);" />
+            {{else}}
+            <img src="/slm/js-lib/ext/4.2.2/resources/themes/images/default/tree/s.gif" class="{{:className}}" data-show="{{:hasChildren}}" />
+            {{/if}}
+            <span>
+                <a href="{{:link}}" target="_blank">{{:formattedID}}</a>
+                <span class="group-content">
+                    {{:content}}
+                </span>
+            </span>
+        </div>
+    </script>
+</footer>
+
+<script type="text/javascript">
+
+    var RALLY = window.parent.RALLY;
+    var app;
+
+    String.prototype.paddingLeft = function (paddingValue) {
+        return String(paddingValue + this).slice(-paddingValue.length);
+    };
+
+    function ToggleGroupElement(element) {
+        var show = (String(element.dataset.show).toLowerCase() === 'true');
+        var level = parseInt(element.parentElement.dataset.level);
+        app.ToggleGroup(element.parentElement.dataset.id, element.parentElement.dataset.breadcrumb, level, show);
+        element.dataset.show = !show;
+        element.className = "group toggle " + (show ? "toggle-show" : "toggle-hide");
+    }
+
+    ExtVisTimeline = function (container, items, groups, milestones, options, events) {
+        var timeline = new vis.Timeline(container, items, groups, options);
+        for (var key in events) {
+            var event = events[key];
+            timeline.on(event.on, event.action);
+        }
+        timeline.CreateCustomTime = function (id, date, title, color) {
+            this.addCustomTime(date, id);
+            this.setCustomTimeTitle(title, id);
+            var customTime = this.customTimes.filter(function (component) {
+                return component.options.id === id;
+            })[0];
+            customTime.hammer.destroy();
+            customTime.hammer = null;
+            if (color) {
+                customTime.bar.style.backgroundColor = color;
+            }
+            customTime.milestone = milestone;
+            return customTime;
+        }
+        timeline.ShowGroups = function (groups) {
+            for (var key in groups) {
+                var group = groups[key];
+                var groupExists = this.groupsData.get(group.id);
+                if (!groupExists) {
+                    this.groupsData.add(group);
+                    this.emit('addedGroup', { items: [group] }, "togglegroupsFunction");
+                }
+            }
+        }
+        timeline.HideGroups = function (groups) {
+            for (var key in groups) {
+                var group = groups[key];
+                var groupExists = this.groupsData.get(group.id);
+                if (groupExists) {
+                    this.groupsData.remove(group.id);
+                    this.emit('removedGroup', { items: [group] }, "togglegroupsFunction");
+                }
+            }
+        }
+        for (var key in milestones) {
+            var milestone = milestones[key];
+            var customTime = timeline.CreateCustomTime(milestone.id, new Date(milestone.date), milestone.content, milestone.color);
+            timeline.emit('addedCustomTime', { items: [customTime] }, "ExtVisTimeline");
+        }
+        return timeline;
+    };
+
+    Ext.define('PortfolioTimelineExtendedApp', {
+        extend: 'Rally.app.App',
+        componentCls: 'app',
+        settingsScope: 'app',
+        config: {
+            defaultSettings: {
+                "Show Planned Items": true,
+                "Show Actual Items": true,
+                "Show Items with No Parent": true,
+                'Hide "Done" Strategies': false,
+                'Hide "Done" Portfolio Items': false,
+                'Hide "Archived" Features': false,
+                'Hide "Accepted" Stories': false,
+            }
+        },
+
+        items: [
+            {
+                xtype: 'container',
+                itemId: 'main',
+                height: '100%',
+                width: '100%'
+            }
+        ],
+
+        getOptions: function () {
+            return [{
+                text: 'Fit Window',
+                handler: this.FitWindow,
+                scope: this
+            }];
+        },
+
+        FitWindow: function () {
+            self.timeline.fit(true);
+        },
+
+        getSettingsFields: function () {
+            return [
+                {
+                    name: 'Show Planned Items',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Show Actual Items',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Show Items with No Parent',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Hide "Done" Strategies',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Hide "Done" Portfolio Items',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Hide "Archived" Features',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Hide "Accepted" Stories',
+                    xtype: 'rallycheckboxfield'
+                }
+            ];
+        },
+
+        CreateGroup: function (data) {
+            return {
+                id: data.id,
+                title: data.content,
+                content: $.render.group(data)
+            };
+        },
+
+        GetIterationDetails: function (url) {
+            var iteration;
+            // need a blocking call
+            $.ajax({ url: self.baseUrl + url, success: function (data) { iteration = data.Iteration; }, async: false });
+            return iteration;
+        },
+
+        GetGroupBreadcrumb: function (breadcrumb, level, currentID, rallyParent) {
+            var prefix = currentID.substring(0, currentID.search(/\d/));
+            currentID = prefix + currentID.substring(currentID.search(/\d/)).paddingLeft("00000000".substring(0, 8 - prefix.length));
+
+            if (level == 0) {
+                return "PROJECT-" + currentID;
+            }
+
+            breadcrumb = breadcrumb || 'PROJECT';
+            if (!rallyParent) {
+                var groups = self.GetDefaultGroups(-1, breadcrumb);
+                for (var i = 0; i < groups.length; i++) {
+                    var group = groups[i];
+                    var groupExists = self.timeline.groupsData.get(group.id);
+                    if (!groupExists) {
+                        self.timeline.groupsData.add(group);
+                    }
+                }
+                return "PROJECT-Z_NOPARENT-" + currentID;
+            }
+
+            var sections = breadcrumb.split("-");
+
+            if (sections.length - 1 == level) {
+                return breadcrumb + '-' + currentID;
+            }
+            if (sections.length == level) {
+                var groups = self.GetDefaultGroups(level - 1, breadcrumb);
+                for (var i = 0; i < groups.length; i++) {
+                    var group = groups[i];
+                    var groupExists = self.timeline.groupsData.get(group.id);
+                    if (!groupExists) {
+                        self.timeline.groupsData.add(group);
+                    }
+                }
+                return breadcrumb + '-' + currentID;
+            }
+
+            if (level = 3) return self.GetGroupBreadcrumb("PROJECT-NOSTRATEGY-NOPORTFOLIO", level, currentID, rallyParent);
+            if (level = 2) return self.GetGroupBreadcrumb("PROJECT-NOSTRATEGY", level, currentID, rallyParent);
+            if (level = 1) return self.GetGroupBreadcrumb("PROJECT", level, currentID, rallyParent);
+        },
+
+        LoadGroups: function (parentid, breadcrumb, level) {
+            if (!level) level = self.defaultLevel;
+            return $.Deferred(function (defer) {
+                var levelObj = $.grep(self._levels, function (o) { return o.id === level + 1; })[0];
+                var getType = function (data) {
+                    if (data.PortfolioItemType && data.PortfolioItemType._refObjectName) {
+                        return data.PortfolioItemType._refObjectName.toLowerCase();
+                    } else if (data._type) {
+                        return data._type.toLowerCase();
+                    }
+                }
+                var shouldHide = function (data) {
+                    var type = getType(data);
+                    if (self.getSetting('Hide "Done" Strategies') == true && data.State) {
+                        if (type == "strategy" && data.State._refObjectName == "Done") {
+                            return true;
+                        }
+                    }
+                    if (self.getSetting('Hide "Done" Portfolio Items') == true && data.State) {
+                        if (type == "portfolio" && data.State._refObjectName == "Done") {
+                            return true;
+                        }
+                    }
+                    if (self.getSetting('Hide "Archived" Features') == true && data.State) {
+                        if (type == "feature" && data.State._refObjectName == "Archived") {
+                            return true;
+                        }
+                    }
+                    if (self.getSetting('Hide "Accepted" Stories') == true && data.ScheduleState) {
+                        if (type == "hierarchicalrequirement" && data.ScheduleState == "Accepted") {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                if (!levelObj) return;
+                $.get(levelObj.template.render({ parentid: parentid, showNoParents: self.getSetting('Show Items with No Parent') }), function (data) {
+                    var groups = $.map(data.QueryResult.Results, function (data, index) {
+                        if (shouldHide(data)) {
+                            return;
+                        }
+                        var levelObj = $.grep(self._levels, function (o) { return o.name === getType(data); })[0];
+                        return self.CreateGroup({
+                            id: data.ObjectID,
+                            formattedID: data.FormattedID,
+                            parent: parentid,
+                            type: getType(data),
+                            link: levelObj.link.render(data),
+                            content: data.Name + (data.Project._refObjectUUID != RALLY.activePage.context.project._refObjectUUID ? ' (' + data.Project._refObjectName + ')' : ''),
+                            color: data.DisplayColor,
+                            hasChildren: data.DirectChildrenCount > 0 && levelObj.name != "hierarchicalrequirement", // don't show children on user stories
+                            description: data.Description,
+                            rank: data.DragAndDropRank,
+                            className: "group planned",
+                            breadcrumb: breadcrumb,
+                            level: levelObj.id
+                        });
+                    });
+
+                    var items = $.map(data.QueryResult.Results, function (data, index) {
+                        if (shouldHide(data)) {
+                            return;
+                        }
+                        var i = [];
+                        if (self.getSetting('Show Planned Items')) {
+                            if (data.PlannedStartDate && data.PlannedEndDate) {
+                                i.push({
+                                    id: data.ObjectID + "_planned",
+                                    group: data.ObjectID,
+                                    title: data.Name,
+                                    content: data.Name,
+                                    start: data.PlannedStartDate,
+                                    end: data.PlannedEndDate,
+                                    className: "timeline-planned"
+                                });
+                            }
+                        }
+                        if (self.getSetting('Show Actual Items')) {
+                            if (data.ActualStartDate && data.ActualEndDate) {
+                                i.push({
+                                    id: data.ObjectID + "_actual",
+                                    group: data.ObjectID,
+                                    content: (data.State && data.State._refObjectName ? data.State._refObjectName : ""),
+                                    title: data.Name,
+                                    start: data.ActualStartDate,
+                                    end: data.ActualEndDate,
+                                    className: "timeline-actual"
+                                });
+                            }
+                        }
+                        if (self.getSetting('Show Planned Items')) {
+                            if (data.Iteration && data.Iteration._ref) {
+                                debugger;
+                                var iteration = self.GetIterationDetails(data.Iteration._ref);
+                                if (iteration) {
+                                    i.push({
+                                        id: data.ObjectID + "_planned",
+                                        group: data.ObjectID,
+                                        content: iteration.Name,
+                                        title: iteration.Name,
+                                        start: iteration.StartDate,
+                                        end: iteration.EndDate,
+                                        className: "timeline-planned"
+                                    });
+                                }
+                            }
+                        }
+                        if (self.getSetting('Show Actual Items')) {
+                            if (data.AcceptedDate && data.InProgressDate) {
+                                i.push({
+                                    id: data.ObjectID + "_actual",
+                                    group: data.ObjectID,
+                                    content: (data.ScheduleState ? data.ScheduleState : ""),
+                                    title: data.Name,
+                                    start: data.InProgressDate,
+                                    end: data.AcceptedDate,
+                                    className: "timeline-actual"
+                                });
+                            }
+                        }
+                        return i;
+                    });
+                    defer.resolve(groups, items);
+                });
+            }).promise();
+        },
+
+        LoadMilestones: function () {
+            return $.Deferred(function (defer) {
+                $.get(self._milestoneUrl, function (data) {
+                    defer.resolve($.map(data.QueryResult.Results, function (milestone, index) {
+                        return {
+                            id: milestone.ObjectID,
+                            content: milestone.Name,
+                            date: milestone.TargetDate,
+                            color: milestone.DisplayColor
+                        }
+                    }));
+                });
+            }).promise();
+        },
+
+        onAddedMilestone: function (milestone) {
+            //console.log("Added milestone: " + milestone.id);
+        },
+
+        onAddedGroup: function (group) {
+            //console.log("Added group: " + group.id);
+        },
+
+        onRemovedGroup: function (group) {
+            //console.log("Removed group: " + group.id);
+        },
+
+        onSelectedItem: function (item) {
+            var $item = $("[data-id=" + item + "]");
+            var groupid = parseInt($item.data("group"));
+            var group = self.timeline.groupsData.get(groupid);
+            var levelObj = $.grep(self._levels, function (o) { return o.id === $(group.content).data("level"); })[0];
+
+            Rally.data.ModelFactory.getModel({
+                type: levelObj.modelType,
+                context: {
+                    workspace: self.getContext().getWorkspaceRef(),
+                    project: null
+                },
+                success: function (model) {
+                    model.load(groupid, {
+                        success: function (record) {
+                            if (!record) return;
+                            if ($item.hasClass("timeline-planned")) {
+                                var pop = Ext.create('Rally.ui.popover.DescriptionPopover', {
+                                    record: record,
+                                    target: Ext.get($item[0]),
+                                    closable: false,
+                                    shouldHidePopoverOnBodyClick: true,
+                                    shouldHidePopoverOnIframeClick: true,
+                                    autoShow: false,
+                                });
+                                pop.afterShow = function () {
+                                    this.callParent(arguments);
+                                };
+                                pop.target.clearListeners();
+                                pop.show();
+                            } else {
+                                if (levelObj.name == "hierarchicalrequirement") {
+                                    var pop = Ext.create('Rally.ui.popover.WorkProductPopover', {
+                                        record: record,
+                                        target: Ext.get($item[0]),
+                                        closable: false,
+                                        shouldHidePopoverOnBodyClick: true,
+                                        shouldHidePopoverOnIframeClick: true,
+                                        autoShow: false
+                                    });
+                                    pop.afterShow = function () {
+                                        this.callParent(arguments);
+                                    };
+                                    pop.target.clearListeners();
+                                    pop.show();
+
+                                } else {
+                                    var pop = Ext.create('Rally.ui.popover.PercentDonePopover', {
+                                        percentDoneName: 'PercentDoneByStoryPlanEstimate',
+                                        target: Ext.get($item[0]),
+                                        closable: false,
+                                        shouldHidePopoverOnBodyClick: true,
+                                        shouldHidePopoverOnIframeClick: true,
+                                    });
+                                    pop.updateContent(record.data);
+                                    pop.show();
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        },
+
+        ToggleGroup: function (parentGroupId, breadcrumb, level, show) {
+            if (show) {
+                $.when(self.LoadGroups(parentGroupId, breadcrumb, level)).done(function (groups, items) {
+                    self.timeline.ShowGroups(groups);
+                    for (var i = 0; i < items.length; i++) {
+                        var item = items[i];
+                        var existingItem = self.timeline.itemsData.get(item.id);
+                        if (!existingItem) {
+                            self.timeline.itemsData.add(item);
+                        }
+                    }
+                });
+            } else {
+                var removedBreadcrumb = breadcrumb;
+                var ids = [];
+                self.timeline.groupsData.forEach(function (o) {
+                    var breadcrumb = $(o.content).data('breadcrumb');
+                    if (breadcrumb.indexOf(removedBreadcrumb + "-") > -1) {
+                        ids.push(o.id);
+                    }
+                });
+                for (i = 0; i < ids.length; i++) {
+                    var id = ids[i];
+                    self.timeline.groupsData.remove(id);
+                }
+            }
+        },
+
+        GetDefaultGroups: function (level, breadcrumb) {
+            var groups = [];
+            if (level == 3) {
+                groups.push(self.CreateGroup(
+                {
+                    id: "NOFEATURE",
+                    type: "feature",
+                    content: "Feature",
+                    hasChildren: false,
+                    description: "Feature",
+                    rank: 0,
+                    className: "group planned toggle toggle-show",
+                    breadcrumb: (breadcrumb ? breadcrumb : "PROJECT-NOSTRATEGY-NOPORTFOLIO") + "-NOFEATURE",
+                    level: 3
+                }));
+                if (!breadcrumb) level--; // ensure that lower level groups are also loaded
+            }
+            if (level == 2) {
+                groups.push(self.CreateGroup(
+                {
+                    id: "NOPORTFOLIO",
+                    type: "portfolio",
+                    content: "Portfolio",
+                    hasChildren: false,
+                    description: "Portfolio",
+                    rank: 0,
+                    className: "group planned toggle toggle-show",
+                    breadcrumb: (breadcrumb ? breadcrumb : "PROJECT-NOSTRATEGY") + "-NOPORTFOLIO",
+                    level: 2
+                }));
+                if (!breadcrumb) level--; // ensure that lower level groups are also loaded
+            }
+            if (level == 1) {
+                groups.push(self.CreateGroup(
+                {
+                    id: "NOSTRATEGY",
+                    type: "strategy",
+                    content: "Strategy",
+                    hasChildren: false,
+                    description: "Strategy",
+                    rank: 0,
+                    className: "group planned toggle toggle-show",
+                    breadcrumb: (breadcrumb ? breadcrumb : "PROJECT") + "-NOSTRATEGY",
+                    level: 1
+                }));
+                if (!breadcrumb) level--; // ensure that lower level groups are also loaded
+            }
+            if (level == 0) {
+                groups.push(self.CreateGroup(
+                {
+                    id: "PROJECT",
+                    type: "project",
+                    content: self.getContext().getProject().Name,
+                    hasChildren: false,
+                    description: self.getContext().getProject().Name,
+                    rank: 0,
+                    className: "group planned toggle toggle-show",
+                    breadcrumb: "PROJECT",
+                    level: 0
+                }));
+            }
+            if (level == -1) {
+                groups.push(self.CreateGroup(
+                {
+                    id: "Z_NOPARENT",
+                    type: "project",
+                    content: "No Parent Defined",
+                    hasChildren: true,
+                    description: "No Parent Defined",
+                    rank: 0,
+                    className: "group planned toggle toggle-hide",
+                    breadcrumb: "PROJECT-Z_NOPARENT",
+                    level: 1
+                }));
+            }
+            return groups;
+        },
+
+        _setTitle: function (title) {
+            $(window.parent.document)
+                .find(".title")
+                .html(title);
+        },
+
+        launch: function () {
+            self = this;
+            self.defaultLevel = 0;
+            self.baseUrl = '//rally1.rallydev.com/slm/webservice/' + Rally.environment.getServer().defaultWsapiVersion + '/';
+            self._setTitle(RALLY.activePage.context.project.Name + " Portfolio Timeline");
+
+            $.templates("group", "#groupTemplate");
+
+            var scope = $.templates("&compact=true&pagesize=200&project=%2Fproject%2F{{:context.project.ObjectID}}&projectScopeUp={{:context.scope.projectScopeUp}}&projectScopeDown={{:context.scope.projectScopeDown}}").render(RALLY.activePage);
+            self._milestoneUrl = $.templates("/slm/webservice/v2.x/Milestone?fetch=true&query=(TargetProject.ObjectID = {{:context.project.ObjectID}})" + scope).render(RALLY.activePage);
+            
+            self._levels =
+                $([
+                    {
+                        id: 0,
+                        name: "project",
+                        template: $.templates("/slm/webservice/v2.x/project?fetch=true" + scope),
+                        link: $.templates("/#/detail/project/{{:ObjectID}}"),
+                        modelType: "project",
+                    },
+                    {
+                        id: 1,
+                        name: "strategy",
+                        template: $.templates("/slm/webservice/v2.x/portfolioitem/strategy?fetch=true" + scope),
+                        link: $.templates("/#/detail/portfolioitem/strategy/{{:ObjectID}}"),
+                        modelType: "Portfolioitem/Strategy",
+                    },
+                    {
+                        id: 2,
+                        name: "portfolio",
+                        template: $.templates("/slm/webservice/v2.x/portfolioitem/portfolio?fetch=true{{if parentid}}&query=({{if showNoParents}}(Parent = null) or ({{:/if}}Parent = \"portfolioitem%2Fstrategy%2F{{:parentid}}\")){{/if}}" + scope),
+                        link: $.templates("/#/detail/portfolioitem/portfolio/{{:ObjectID}}"),
+                        modelType: "Portfolioitem/Portfolio",
+                    },
+                    {
+                        id: 3,
+                        name: "feature",
+                        template: $.templates("/slm/webservice/v2.x/portfolioitem/feature?fetch=true{{if parentid}}&query=(Parent = \"portfolioitem%2Fportfolio%2F{{:parentid}}\"){{/if}}" + scope),
+                        link: $.templates("/#/detail/portfolioitem/feature/{{:ObjectID}}"),
+                        modelType: "Portfolioitem/Feature",
+                    },
+                    {
+                        id: 4,
+                        name: "hierarchicalrequirement",
+                        template: $.templates("/slm/webservice/v2.x/hierarchicalrequirement?fetch=true{{if parentid}}&query=(Feature = \"portfolioitem%2Ffeature%2F{{:parentid}}\"){{/if}}" + scope),
+                        link: $.templates("/#/detail/userstory/{{:ObjectID}}"),
+                        modelType: "UserStory",
+                    }
+                ]);
+
+            self.down('#main').add(Ext.create('Ext.form.Panel', {
+                contentEl: 'appBody',
+                autoSize: true,
+                autoExpand: true,
+                autoHeight: true,
+                layout: {
+                    type: 'fit'
+                },
+            }));
+
+            $.when(self.LoadGroups(), self.LoadMilestones())
+                .done(function (data, milestones) {
+                    var groups = data[0].concat(self.GetDefaultGroups(0));
+                    var items = data[1];
+
+                    milestones.push({
+                        id: "TODAY-MILESTONE",
+                        content: "TODAY",
+                        date: new Date(),
+                        color: "RED"
+                    });
+
+                    var container = document.getElementById('appBody');
+                    container.innerHTML = "";
+
+                    var options = {
+                        showCurrentTime: false,
+                        autoResize: true,
+                        dataAttributes: 'all',
+                        orientation: 'top',
+                        editable: false,
+                        zoomMin: 1000 * 60 * 60 * 24 * 14, // 14 day min zoom
+                        zoomMax: 1000 * 60 * 60 * 24 * 365 * 6, // 6 years min zoom
+                        groupOrder: function (a, b) {
+                            if (!a.breadcrumb) a.breadcrumb = $(a.content).data("breadcrumb");
+                            if (!b.breadcrumb) b.breadcrumb = $(b.content).data("breadcrumb");
+                            return a.breadcrumb.localeCompare(b.breadcrumb);
+                        },
+                        stack: false,
+                    };
+
+                    var events = [
+                    {
+                        on: 'select', action: function (properties) {
+                            if (properties && properties.items && properties.items.length > 0) {
+                                self.onSelectedItem(properties.items[0]);
+                            }
+                        }
+                    },
+                    {
+                        on: 'addedGroup', action: function (properties) {
+                            if (properties && properties.items && properties.items.length > 0) {
+                                self.onAddedGroup(properties.items[0]);
+                            }
+                        }
+                    },
+                    {
+                        on: 'removedGroup', action: function (properties) {
+                            if (properties && properties.items && properties.items.length > 0) {
+                                self.onRemovedGroup(properties.items[0]);
+                            }
+                        }
+                    },
+                    {
+                        on: 'addedCustomTime', action: function (properties) {
+                            if (properties && properties.items && properties.items.length > 0) {
+                                self.onAddedMilestone(properties.items[0]);
+                            }
+                        }
+                    }];
+
+                    self.timeline = new ExtVisTimeline(container, items, groups, milestones, options, events);
+
+                    self.IterativeLoad(groups);
+                });
+
+            app = Rally.getApp();
+        },
+
+        IterativeLoad: function (groups) {
+            if (groups.length > self.defaultLevel + 1) {
+                return;
+            }
+            self.defaultLevel++;
+            $.when(self.LoadGroups())
+                .done(function (data, items) {
+                    var groups = data.concat(self.GetDefaultGroups(self.defaultLevel));
+                    self.timeline.ShowGroups(groups);
+                    self.timeline.itemsData.add(items);
+                    self.IterativeLoad(groups);
+                });
+        }
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('PortfolioTimelineExtendedApp', {
+            name: 'Portfolio Timeline Extended'
+        });
+    });
+
+</script>
