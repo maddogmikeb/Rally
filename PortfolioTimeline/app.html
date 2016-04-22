@@ -302,46 +302,50 @@
         },
 
         GetGroupBreadcrumb: function (breadcrumb, level, currentID, rallyParent) {
-            var prefix = currentID.substring(0, currentID.search(/\d/));
-            currentID = prefix + currentID.substring(currentID.search(/\d/)).paddingLeft("00000000".substring(0, 8 - prefix.length));
+            try { 
+                var prefix = currentID.substring(0, currentID.search(/\d/));
+                currentID = prefix + currentID.substring(currentID.search(/\d/)).paddingLeft("00000000".substring(0, 8 - prefix.length));
 
-            if (level == 0) {
-                return "PROJECT-" + currentID;
-            }
-
-            breadcrumb = breadcrumb || 'PROJECT';
-            if (!rallyParent) {
-                var groups = self.GetDefaultGroups(-1, breadcrumb);
-                for (var i = 0; i < groups.length; i++) {
-                    var group = groups[i];
-                    var groupExists = self.timeline.groupsData.get(group.id);
-                    if (!groupExists) {
-                        self.timeline.groupsData.add(group);
-                    }
+                if (level == 0) {
+                    return "PROJECT-" + currentID;
                 }
-                return "PROJECT-Z_NOPARENT-" + currentID;
-            }
 
-            var sections = breadcrumb.split("-");
-
-            if (sections.length - 1 == level) {
-                return breadcrumb + '-' + currentID;
-            }
-            if (sections.length == level) {
-                var groups = self.GetDefaultGroups(level - 1, breadcrumb);
-                for (var i = 0; i < groups.length; i++) {
-                    var group = groups[i];
-                    var groupExists = self.timeline.groupsData.get(group.id);
-                    if (!groupExists) {
-                        self.timeline.groupsData.add(group);
+                breadcrumb = breadcrumb || 'PROJECT';
+                if (!rallyParent) {
+                    var groups = self.GetDefaultGroups(-1, breadcrumb);
+                    for (var i = 0; i < groups.length; i++) {
+                        var group = groups[i];
+                        var groupExists = self.timeline.groupsData.get(group.id);
+                        if (!groupExists) {
+                            self.timeline.groupsData.add(group);
+                        }
                     }
+                    return "PROJECT-Z_NOPARENT-" + currentID;
                 }
-                return breadcrumb + '-' + currentID;
-            }
 
-            if (level = 3) return self.GetGroupBreadcrumb("PROJECT-NOSTRATEGY-NOPORTFOLIO", level, currentID, rallyParent);
-            if (level = 2) return self.GetGroupBreadcrumb("PROJECT-NOSTRATEGY", level, currentID, rallyParent);
-            if (level = 1) return self.GetGroupBreadcrumb("PROJECT", level, currentID, rallyParent);
+                var sections = breadcrumb.split("-");
+
+                if (sections.length - 1 == level) {
+                    return breadcrumb + '-' + currentID;
+                }
+                if (sections.length == level) {
+                    var groups = self.GetDefaultGroups(level - 1, breadcrumb);
+                    for (var i = 0; i < groups.length; i++) {
+                        var group = groups[i];
+                        var groupExists = self.timeline.groupsData.get(group.id);
+                        if (!groupExists) {
+                            self.timeline.groupsData.add(group);
+                        }
+                    }
+                    return breadcrumb + '-' + currentID;
+                }
+
+                if (level = 3) return self.GetGroupBreadcrumb("PROJECT-NOSTRATEGY-NOPORTFOLIO", level, currentID, rallyParent);
+                if (level = 2) return self.GetGroupBreadcrumb("PROJECT-NOSTRATEGY", level, currentID, rallyParent);
+                if (level = 1) return self.GetGroupBreadcrumb("PROJECT", level, currentID, rallyParent);
+            } catch (ex) {
+                debugger;
+            }
         },
 
         LoadGroups: function (parentid, breadcrumb, level) {
@@ -398,7 +402,7 @@
                             description: data.Description,
                             rank: data.DragAndDropRank,
                             className: "group planned",
-                            breadcrumb: breadcrumb,
+                            breadcrumb: self.GetGroupBreadcrumb(breadcrumb, level, data.FormattedID, data.Parent),
                             level: levelObj.id
                         });
                     });
@@ -436,7 +440,6 @@
                         }
                         if (self.getSetting('Show Planned Items')) {
                             if (data.Iteration && data.Iteration._ref) {
-                                debugger;
                                 var iteration = self.GetIterationDetails(data.Iteration._ref);
                                 if (iteration) {
                                     i.push({
@@ -704,7 +707,7 @@
                     {
                         id: 2,
                         name: "portfolio",
-                        template: $.templates("/slm/webservice/v2.x/portfolioitem/portfolio?fetch=true{{if parentid}}&query=({{if showNoParents}}(Parent = null) or ({{:/if}}Parent = \"portfolioitem%2Fstrategy%2F{{:parentid}}\")){{/if}}" + scope),
+                        template: $.templates("/slm/webservice/v2.x/portfolioitem/portfolio?fetch=true{{if parentid}}&query=({{if showNoParents}}(Parent = null) or ({{/if}}Parent = \"portfolioitem%2Fstrategy%2F{{:parentid}}\"){{if showNoParents}}){{/if}}{{/if}}" + scope),
                         link: $.templates("/#/detail/portfolioitem/portfolio/{{:ObjectID}}"),
                         modelType: "Portfolioitem/Portfolio",
                     },
