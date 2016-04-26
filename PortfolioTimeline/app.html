@@ -302,7 +302,7 @@
         },
 
         GetGroupBreadcrumb: function (breadcrumb, level, currentID, rallyParent) {
-            try { 
+            try {
                 var prefix = currentID.substring(0, currentID.search(/\d/));
                 currentID = prefix + currentID.substring(currentID.search(/\d/)).paddingLeft("00000000".substring(0, 8 - prefix.length));
 
@@ -402,7 +402,7 @@
                             description: data.Description,
                             rank: data.DragAndDropRank,
                             className: "group planned",
-                            breadcrumb: self.GetGroupBreadcrumb(breadcrumb, level, data.FormattedID, data.Parent),
+                            breadcrumb: self.GetGroupBreadcrumb(breadcrumb, level, data.FormattedID, data.Parent || data.Feature),
                             level: levelObj.id
                         });
                     });
@@ -687,7 +687,7 @@
 
             var scope = $.templates("&compact=true&pagesize=200&project=%2Fproject%2F{{:context.project.ObjectID}}&projectScopeUp={{:context.scope.projectScopeUp}}&projectScopeDown={{:context.scope.projectScopeDown}}").render(RALLY.activePage);
             self._milestoneUrl = $.templates("/slm/webservice/v2.x/Milestone?fetch=true&query=(TargetProject.ObjectID = {{:context.project.ObjectID}})" + scope).render(RALLY.activePage);
-            
+
             self._levels =
                 $([
                     {
