@@ -229,6 +229,7 @@
                 'Hide "Done" Portfolio Items': false,
                 'Hide "Archived" Features': false,
                 'Hide "Accepted" Stories': false,
+                'Show Releases' : true,
             }
         },
 
@@ -281,6 +282,10 @@
                 },
                 {
                     name: 'Hide "Accepted" Stories',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Show Releases',
                     xtype: 'rallycheckboxfield'
                 }
             ];
@@ -418,7 +423,7 @@
                                     id: data.ObjectID + "_planned",
                                     group: data.ObjectID,
                                     title: data.Name,
-                                    content: data.Name,
+                                    content: data.Name + " (<b>" + (data.Owner && data.Owner._refObjectName ? data.Owner._refObjectName : "-</b>") + ")",
                                     start: data.PlannedStartDate,
                                     end: data.PlannedEndDate,
                                     className: "timeline-planned"
@@ -445,7 +450,7 @@
                                     i.push({
                                         id: data.ObjectID + "_planned",
                                         group: data.ObjectID,
-                                        content: iteration.Name,
+                                        content: data.Name + " (" + (data.Owner && data.Owner._refObjectName ? data.Owner._refObjectName : "-") + ") - " + iteration.Name,
                                         title: iteration.Name,
                                         start: iteration.StartDate,
                                         end: iteration.EndDate,
@@ -687,6 +692,7 @@
 
             var scope = $.templates("&compact=true&pagesize=200&project=%2Fproject%2F{{:context.project.ObjectID}}&projectScopeUp={{:context.scope.projectScopeUp}}&projectScopeDown={{:context.scope.projectScopeDown}}").render(RALLY.activePage);
             self._milestoneUrl = $.templates("/slm/webservice/v2.x/Milestone?fetch=true&query=(TargetProject.ObjectID = {{:context.project.ObjectID}})" + scope).render(RALLY.activePage);
+            self._releasesUrl = $.templates("/slm/webservice/v2.x/Release?fetch=true&query=(Project.ObjectID = {{:context.project.ObjectID}})" + scope).render(RALLY.activePage);
 
             self._levels =
                 $([
@@ -737,8 +743,8 @@
                 },
             }));
 
-            $.when(self.LoadGroups(), self.LoadMilestones())
-                .done(function (data, milestones) {
+            $.when(self.LoadGroups(), self.LoadMilestones(), self.LoadReleases())
+                .done(function (data, milestones, releases) {
                     var groups = data[0].concat(self.GetDefaultGroups(0));
                     var items = data[1];
 
@@ -759,7 +765,7 @@
                         orientation: 'top',
                         editable: false,
                         zoomMin: 1000 * 60 * 60 * 24 * 14, // 14 day min zoom
-                        zoomMax: 1000 * 60 * 60 * 24 * 365 * 6, // 6 years min zoom
+                        zoomMax: 1000 * 60 * 60 * 24 * 365 * 6, // 6 years max zoom
                         groupOrder: function (a, b) {
                             if (!a.breadcrumb) a.breadcrumb = $(a.content).data("breadcrumb");
                             if (!b.breadcrumb) b.breadcrumb = $(b.content).data("breadcrumb");
@@ -799,8 +805,14 @@
                     }];
 
                     self.timeline = new ExtVisTimeline(container, items, groups, milestones, options, events);
-
                     self.IterativeLoad(groups);
+
+                    if (self.getSetting('Show Releases')) {
+                        if (releases && releases.length > 0) {
+                            self.timeline.ShowGroups(self.ReleasesGroup(releases));
+                            self.timeline.itemsData.add(releases);
+                        }
+                    }
                 });
 
             app = Rally.getApp();
@@ -817,8 +829,59 @@
                     self.timeline.ShowGroups(groups);
                     self.timeline.itemsData.add(items);
                     self.IterativeLoad(groups);
+                })
+        },
+
+        LoadReleases: function () {
+            return $.Deferred(function (defer) {
+                $.get(self._releasesUrl, function (data) {
+                    defer.resolve($.map(data.QueryResult.Results, function (release, index) {
+                        return {
+                            id: release.ObjectID,
+                            group: release.ObjectID,
+                            title: release.Name,
+                            content: release.Name,
+                            start: release.ReleaseStartDate,
+                            end: release.ReleaseDate,
+                            className: "timeline-release"
+                        }
+                    }));
                 });
-        }
+            }).promise();
+        },
+
+        ReleasesGroup: function (releases) {
+            var groups = [];
+            groups.push(self.CreateGroup(
+            {
+                id: "RELEASES",
+                type: "releases",
+                content: "Releases",
+                hasChildren: false,
+                description: "Releases",
+                rank: 1,
+                className: "group planned toggle toggle-show",
+                breadcrumb: "PROJECT-0000000",
+                level: 1
+            }));
+            for (var i = 0; i < releases.length; i++) {
+                var release = releases[i];
+                groups.push(self.CreateGroup(
+                {
+                    id: release.id,
+                    type: "releases",
+                    content: release.title,
+                    hasChildren: false,
+                    description: release.content,
+                    rank: i,
+                    className: "group planned toggle toggle-show",
+                    breadcrumb: "PROJECT-0000000-" + i,
+                    level: 2
+                }));
+            }
+            //groups = groups.concat(self.GetDefaultGroups(0));
+            return groups;
+        },
     });
 
     Rally.onReady(function () {
