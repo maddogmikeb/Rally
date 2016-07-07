@@ -1,0 +1,300 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!-- Copyright (c) 2012  Rally Software Development Corp.  All rights reserved -->
+<html>
+<head>
+    <title>FeatureThroughput</title>
+    <meta name="Name" content="App: PortfolioItemThroughput" />
+    <meta name="Version" content="2012.08.27" />
+    <meta name="Vendor" content="Rally Software" />
+    <script type="text/javascript" src="/apps/1.29/sdk.js?debug=true"></script>
+
+    <script type="text/javascript">
+
+        Date.prototype.getWeekNumber = function () {
+            var d = new Date(+this);
+            d.setHours(0, 0, 0);
+            d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+            return Math.ceil((((d - new Date(d.getFullYear(), 0, 1)) / 8.64e7) + 1) / 7);
+        };
+
+        function PortfolioItemThroughput() {
+            var that = this;
+            this.display = function (element) {
+                var DEFAULT_NUM_WEEKS = 12 - 1;
+
+                var rallyDataSource = null;
+                var storiesTable = null;
+
+                var recentResults = null;
+                var currentSeries = null;
+                var currentNumWeeks = null;
+
+                function isNumeric(n) {
+                    return !isNaN(parseFloat(n)) && isFinite(n);
+                }
+
+                function getMonday(date) {
+                    var day = date.getDay() || 7;
+                    if (day !== 1)
+                        date.setHours(-24 * (day - 1));
+                    return date;
+                }
+
+                function dateToYMD(date) {
+                    var d = date.getDate();
+                    var m = date.getMonth() + 1;
+                    var y = date.getFullYear();
+                    return '' + y + '-' + (m <= 9 ? '0' + m : m) + '-' + (d <= 9 ? '0' + d : d);
+                }
+
+                function getKeyFromRecord(record) {
+                    return getKeyFromDate(rally.sdk.util.DateTime.fromIsoString(record.AcceptedDate));
+                }
+
+                function getKeyFromDate(theDate) {
+                    return dateToYMD(getMonday(theDate));
+                    //return "Wk: " + theDate.getWeekNumber();
+                }
+
+                function getSeries(item) {
+                    var est = item.PlanEstimate;
+                    if (!isNumeric(est)) return "None";
+                    if (est <= 0) {
+                        return "None";
+                    }
+                    if (est <= 3) {
+                        return "X-Small";
+                    }
+                    if (3 > est && est <= 5) {
+                        return "Small";
+                    }
+                    if (5 > est && est <= 11) {
+                        return "Medium";
+                    }
+                    if (11 > est && est <= 19) {
+                        return "Large";
+                    }
+                    return "X-Large";
+                }
+
+                function getSeriesNames() {
+                    return ["None", "X-Small", "Small", "Medium", "Large", "X-Large"];
+                }
+
+                function collectResults(results) {
+                    recentResults = results;
+
+                    var series = {};
+                    dojo.forEach(results.completedItems, function (item) {
+                        var seriesName = getSeries(item);
+                        var seriesVals = null;
+                        if (series[seriesName]) {
+                            seriesVals = series[seriesName];
+                        } else {
+                            seriesVals = [];
+                            series[seriesName] = seriesVals;
+                        }
+                        var key = getKeyFromRecord(item);
+
+                        var found = false;
+                        dojo.forEach(seriesVals, function (val) {
+                            if (val[0] == key) {
+                                val[1] += 1;
+                                found = true;
+                            }
+                        });
+                        if (!found) {
+                            var newVal = [key, 1];
+                            seriesVals.push(newVal);
+                        }
+
+                        item.FormattedIDLink = new rally.sdk.ui.basic.Link({ "item": item });
+
+                    });
+
+                    currentSeries = series;
+                    renderChart(series, true);
+                }
+
+                function renderChart(data, isStacked) {
+                    var chart = new EJSC.Chart("chart", { show_legend: false, height: "60%", width: "100%", show_titlebar: false, auto_resize: true });
+
+                    var startDate = rally.sdk.util.DateTime.add(new Date(), "week", (0 - currentNumWeeks));
+                    for (var idx = 0; idx < currentNumWeeks; idx++) {
+                        var binKey = getKeyFromDate(startDate);
+                        chart.axis_bottom.addBin(binKey);
+                        startDate = rally.sdk.util.DateTime.add(startDate, "week", 1);
+                    }
+
+                    var container = chart;
+                    if (isStacked) {
+                        container = new EJSC.StackedBarSeries({ autosort: true });
+                        container.onShowHint = function (point, series, chart, hint_string) {
+                            return "[series_title] = [y]";
+                        };
+                        chart.addSeries(container);
+                    }
+
+                    var seriesnames = getSeriesNames();
+                    for (var i in seriesnames) {
+                        var item = seriesnames[i];
+                        if (data.hasOwnProperty(item)) {
+                            var series = container.addSeries(new EJSC.BarSeries(new EJSC.ArrayDataHandler(data[item]), { title: item, autosort: true }));
+                        }
+                    }
+
+                    chart.onAfterSelectPoint = function (point, series, chart, hintElem, type) {
+                        if (type == 'select') {
+                            var weekLabel = point.x;
+                            if (dojo.isString(weekLabel) === false) {
+                                weekLabel = chart.axis_bottom.__ticks[weekLabel - 1].l;
+                            }
+                            renderTable(series.title, weekLabel);
+                        }
+                    };
+                }
+
+                function renderTable(allocation, week) {
+                    document.getElementById("stories").innerHTML = "";
+
+                    if (recentResults) {
+                        var selectedRecords = dojo.filter(recentResults.completedItems, function (item) {
+                            return (getSeries(item) == allocation) && (getKeyFromRecord(item) == week);
+                        });
+                        var tableConfig = {
+                            columns: [
+                                { key: "FormattedIDLink", header: "Formatted ID" },
+                                { key: "Name", header: "Name" },
+                                { key: "Project.Name", header: "Project" },
+                                { key: "PlanEstimate", header: "Plan Estimate" },
+                                { key: "AcceptedDate", header: "Accepted Date" }
+                            ],
+                            items: selectedRecords
+                        };
+
+                        if (storiesTable) {
+                            storiesTable.destroy();
+                        }
+                        storiesTable = new rally.sdk.ui.Table(tableConfig);
+                        storiesTable.display("stories");
+
+                    } else {
+                        console.log("WHOOPS.  There should be some results.");
+                    }
+                }
+
+                function loadData(numWeeks) {
+                    var startDate = rally.sdk.util.DateTime.add(new Date(), "week", (0 - numWeeks));
+
+                    var queryConfig = {
+                        key: 'completedItems',
+                        type: 'hierarchicalrequirement', 
+                        fetch: 'Parent,AcceptedDate,PlanEstimate,Project,Name,FormattedID', 
+                        order: 'AcceptedDate',
+                        query: '(AcceptedDate >= "' + rally.sdk.util.DateTime.format(startDate, 'yyyy-MM-dd') + '")'
+                    };
+                    rallyDataSource.findAll(queryConfig, collectResults);
+                }
+
+                function onLoad() {
+                    rallyDataSource = new rally.sdk.data.RallyDataSource(
+                            '__WORKSPACE_OID__',
+                               '__PROJECT_OID__',
+                               '__PROJECT_SCOPING_UP__',
+                               '__PROJECT_SCOPING_DOWN__');
+
+                    rallyDataSource.setApiVersion('1.37');
+
+                    currentNumWeeks = DEFAULT_NUM_WEEKS;                    
+                    loadData(currentNumWeeks)
+                }
+
+                rally.addOnLoad(onLoad);
+            };
+        }
+    </script>
+
+    <style type="text/css">
+    </style>
+
+    <script type="text/javascript">
+        function onLoad() {
+            var featureThroughput = new PortfolioItemThroughput();
+            featureThroughput.display(dojo.body());
+            var appHeader = document.getElementById("appHeader");
+            if (appHeader) {
+                appHeader.parentNode.removeChild(appHeader);
+            }
+        }
+        rally.addOnLoad(onLoad);
+    </script>
+</head>
+<body>   
+    <div id="chart" style="height: 400px; width: 100%"></div>
+    <div id="stories"></div>
+    <div>
+        <table style="width: 40%">
+            <thead style="font-weight: bold;">
+                <tr>
+                    <td>
+                        Name
+                    </td>
+                    <td>
+                        Planned Estimated
+                    </td>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        None
+                    </td>
+                    <td>
+                        0 or Not set
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        X-Small
+                    </td>
+                    <td>
+                        0 > X <= 3
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        Small
+                    </td>
+                    <td>
+                        3 > X <= 5
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        Medium
+                    </td>
+                    <td>
+                        5 > X <= 11
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        Large
+                    </td>
+                    <td>
+                        11 > X <= 19
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        X-Large
+                    </td>
+                    <td>
+                        19 > X
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
