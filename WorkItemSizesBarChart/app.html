@@ -6,16 +6,26 @@
     <meta name="Name" content="App: PortfolioItemThroughput" />
     <meta name="Version" content="2012.08.27" />
     <meta name="Vendor" content="Rally Software" />
-    <script type="text/javascript" src="/apps/1.29/sdk.js?debug=true"></script>
+    <script type="text/javascript" src="/apps/1.29/sdk.js?debug=false"></script>
+
+    <style>
+        .AxisTickLabels {
+            height: 10px;
+            -webkit-transform: rotate(315deg);
+            -moz-transform: rotate(315deg);
+            -o-transform: rotate(315deg);
+            writing-mode: lr-tb;
+        }
+    </style>
 
     <script type="text/javascript">
 
-        Date.prototype.getWeekNumber = function () {
-            var d = new Date(+this);
-            d.setHours(0, 0, 0);
-            d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-            return Math.ceil((((d - new Date(d.getFullYear(), 0, 1)) / 8.64e7) + 1) / 7);
-        };
+        HTMLElement.prototype.alpha = function (a) {
+            current_color = getComputedStyle(this).getPropertyValue("background-color");
+            match = /rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,\s*\d+[\.\d+]*)*\)/g.exec(current_color)
+            a = a > 1 ? (a / 100) : a;
+            this.style.backgroundColor = "rgba(" + [match[1], match[2], match[3], a].join(',') + ")";
+        }
 
         function PortfolioItemThroughput() {
             var that = this;
@@ -29,14 +39,18 @@
                 var currentSeries = null;
                 var currentNumWeeks = null;
 
+                var weeks = {};
+
                 function isNumeric(n) {
                     return !isNaN(parseFloat(n)) && isFinite(n);
                 }
 
-                function getMonday(date) {
+                function getSunday(date) {
                     var day = date.getDay() || 7;
                     if (day !== 1)
                         date.setHours(-24 * (day - 1));
+                    date.setHours(-24);
+                    date.setHours(0, 0, 0, 0); // set to midnight
                     return date;
                 }
 
@@ -44,36 +58,36 @@
                     var d = date.getDate();
                     var m = date.getMonth() + 1;
                     var y = date.getFullYear();
-                    return '' + y + '-' + (m <= 9 ? '0' + m : m) + '-' + (d <= 9 ? '0' + d : d);
+                    //return y + '-' + (m <= 9 ? '0' + m : m) + '-' + (d <= 9 ? '0' + d : d);
+                    return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m);
+                }
+
+                function convertUTCDateToLocalDate(date) {
+                    var newDate = new Date(date.getTime() + date.getTimezoneOffset() * 60 * 1000);
+                    var offset = date.getTimezoneOffset() / 60;
+                    var hours = date.getHours();
+                    newDate.setHours(hours - offset);
+                    return newDate;
                 }
 
                 function getKeyFromRecord(record) {
-                    return getKeyFromDate(rally.sdk.util.DateTime.fromIsoString(record.AcceptedDate));
+                    //var d = rally.sdk.util.DateTime.fromIsoString(record.AcceptedDate);
+                    var d = new Date(record.AcceptedDate);
+                    return getKeyFromDate(d);
                 }
 
                 function getKeyFromDate(theDate) {
-                    return dateToYMD(getMonday(theDate));
-                    //return "Wk: " + theDate.getWeekNumber();
+                    return dateToYMD(getSunday(theDate));
                 }
 
                 function getSeries(item) {
                     var est = item.PlanEstimate;
                     if (!isNumeric(est)) return "None";
-                    if (est <= 0) {
-                        return "None";
-                    }
-                    if (est <= 3) {
-                        return "X-Small";
-                    }
-                    if (3 > est && est <= 5) {
-                        return "Small";
-                    }
-                    if (5 > est && est <= 11) {
-                        return "Medium";
-                    }
-                    if (11 > est && est <= 19) {
-                        return "Large";
-                    }
+                    if (est <= 0) return "None";
+                    if (est <= 3) return "X-Small";
+                    if (est <= 5) return "Small";
+                    if (est <= 11) return "Medium";
+                    if (est <= 19) return "Large";
                     return "X-Large";
                 }
 
@@ -82,11 +96,13 @@
                 }
 
                 function collectResults(results) {
-                    recentResults = results;
-
                     var series = {};
+
+                    var p = {};
+
                     dojo.forEach(results.completedItems, function (item) {
                         var seriesName = getSeries(item);
+                        item.Series = seriesName;
                         var seriesVals = null;
                         if (series[seriesName]) {
                             seriesVals = series[seriesName];
@@ -94,7 +110,16 @@
                             seriesVals = [];
                             series[seriesName] = seriesVals;
                         }
+                        if (!series[seriesName].hasOwnProperty("Total")) {
+                            series[seriesName].Total = 0;
+                        }
+
                         var key = getKeyFromRecord(item);
+                        item.SeriesKey = key;
+
+                        if (!p.hasOwnProperty(key)) {
+                            p[key] = 0;
+                        }
 
                         var found = false;
                         dojo.forEach(seriesVals, function (val) {
@@ -108,38 +133,114 @@
                             seriesVals.push(newVal);
                         }
 
-                        item.FormattedIDLink = new rally.sdk.ui.basic.Link({ "item": item });
+                        series[seriesName].Total += 1;
+                        p[key] += 1;
 
+                        item.FormattedIDLink = new rally.sdk.ui.basic.Link({ "item": item });
+                        item.AcceptedDate = convertUTCDateToLocalDate(rally.sdk.util.DateTime.fromIsoString(item.AcceptedDate)).toString();
                     });
 
+                    //var seriesnames = getSeriesNames();
+                    //for (var i in seriesnames) {
+                    //    try {
+                    //        var seriesName = seriesnames[i];
+                    //        console.log(seriesName + " total: " + series[seriesName].Total);
+                    //        for (var j in series[seriesName]) {
+                    //            var val = series[seriesName][j];
+                    //            console.log(seriesName + " " + val[0] + " " + val[1]);
+                    //        }
+                    //    } catch (e) {
+
+                    //    }
+                    //}
+                    
+                    recentResults = results;
                     currentSeries = series;
-                    renderChart(series, true);
+                    renderChart(series, p);
                 }
 
-                function renderChart(data, isStacked) {
-                    var chart = new EJSC.Chart("chart", { show_legend: false, height: "60%", width: "100%", show_titlebar: false, auto_resize: true });
+                function renderChart(data, p) {
+                    var chart = new EJSC.Chart("chart",
+                        {
+                            show_legend: false,
+                            height: "60%",
+                            width: "100%",
+                            show_titlebar: false,
+                            auto_resize: true,
+                            allow_mouse_wheel_zoom: false,
+                            axis_bottom: {
+                                label_class: "AxisTickLabels",
+                                caption: ""
+                            },
+                            axis_left: {
+                                caption: ""
+                            }
+                        });
 
-                    var startDate = rally.sdk.util.DateTime.add(new Date(), "week", (0 - currentNumWeeks));
+                    var startDate = rally.sdk.util.DateTime.add(getSunday(new Date()), "week", (0 - currentNumWeeks));
                     for (var idx = 0; idx < currentNumWeeks; idx++) {
                         var binKey = getKeyFromDate(startDate);
+                        //console.log("renderChart - Start: " + startDate);
+
                         chart.axis_bottom.addBin(binKey);
                         startDate = rally.sdk.util.DateTime.add(startDate, "week", 1);
                     }
 
-                    var container = chart;
-                    if (isStacked) {
-                        container = new EJSC.StackedBarSeries({ autosort: true });
-                        container.onShowHint = function (point, series, chart, hint_string) {
-                            return "[series_title] = [y]";
-                        };
-                        chart.addSeries(container);
+                    var sum = 0;
+                    var count = 0;
+                    for (var i in p) {
+                        //console.log("Total for " + i + ": " + p[i]);
+                        sum += p[i];
+                        count++;
                     }
+                    var average = sum / count;
+                    var averages = [];
+                    for (var i in p) {
+                        averages.push([i, average]);
+                    }
+
+                    chart.setTitle("Average: " + average.toFixed(2));
+                    chart.showTitlebar();
+
+                    var averageLine = new EJSC.LineSeries(
+                        new EJSC.ArrayDataHandler(averages), { title: "Average" }
+                    );
+                    chart.addSeries(averageLine);
+
+                    var container = new EJSC.StackedBarSeries({ title: "container", autosort: true }, false);
+                    container.onShowHint = function (point, series, chart, hint_string) {
+                        var weekLabel = point.x;
+                        if (dojo.isString(weekLabel) === false) {
+                            weekLabel = chart.axis_bottom.__ticks[weekLabel - 1].l;
+                        }
+                        var total = 0;
+                        var series = chart.__series[1].__series;
+                        for (var j in series) {
+                            var item = series[j];
+                            for (var a in item.__dataHandler.__array) {
+                                var aitem = item.__dataHandler.__array[a];
+                                if (aitem[0] == weekLabel) {
+                                    total += aitem[1];
+                                }
+                            }
+                        }
+                        return "<span style='font-size: 12pt'>[series_title] = <b>[y]</b></span><br/><br/><b>Total: " + total + "</b>";
+                    };
+                    chart.addSeries(container);
 
                     var seriesnames = getSeriesNames();
                     for (var i in seriesnames) {
                         var item = seriesnames[i];
                         if (data.hasOwnProperty(item)) {
-                            var series = container.addSeries(new EJSC.BarSeries(new EJSC.ArrayDataHandler(data[item]), { title: item, autosort: true }));
+                            var dh = new EJSC.ArrayDataHandler(data[item]);
+                            var series = container.addSeries(new EJSC.BarSeries(dh, { title: item, autosort: true }), false);
+                            var es = document.getElementsByClassName(item);
+                            for (var i = 0; i < es.length; i++) {
+                                if (es[i]) {
+                                    es[i].style.backgroundColor = series.color;
+                                    es[i].alpha(20);
+                                }
+                            }
                         }
                     }
 
@@ -154,12 +255,12 @@
                     };
                 }
 
-                function renderTable(allocation, week) {
+                function renderTable(series, week) {
                     document.getElementById("stories").innerHTML = "";
 
                     if (recentResults) {
                         var selectedRecords = dojo.filter(recentResults.completedItems, function (item) {
-                            return (getSeries(item) == allocation) && (getKeyFromRecord(item) == week);
+                            return item.Series == series && item.SeriesKey == week;
                         });
                         var tableConfig = {
                             columns: [
@@ -184,40 +285,38 @@
                 }
 
                 function loadData(numWeeks) {
-                    var startDate = rally.sdk.util.DateTime.add(new Date(), "week", (0 - numWeeks));
+                    var startDate = getSunday(rally.sdk.util.DateTime.add(getSunday(convertUTCDateToLocalDate(new Date())), "week", (0 - numWeeks)));
+                    var endDate = getSunday(convertUTCDateToLocalDate(new Date()));
 
                     var queryConfig = {
                         key: 'completedItems',
-                        type: 'hierarchicalrequirement', 
-                        fetch: 'Parent,AcceptedDate,PlanEstimate,Project,Name,FormattedID', 
+                        type: 'hierarchicalrequirement',
+                        fetch: 'Parent,AcceptedDate,PlanEstimate,Project,Name,FormattedID',
                         order: 'AcceptedDate',
-                        query: '(AcceptedDate >= "' + rally.sdk.util.DateTime.format(startDate, 'yyyy-MM-dd') + '")'
+                        query: '((AcceptedDate >= "' + rally.sdk.util.DateTime.format(startDate, 'yyyy-MM-dd') + '") And (AcceptedDate < "' + rally.sdk.util.DateTime.format(endDate, 'yyyy-MM-dd') + '"))'
                     };
                     rallyDataSource.findAll(queryConfig, collectResults);
                 }
 
                 function onLoad() {
+                    document.getElementById("chart").innerHTML = "Loading chart...";
+
                     rallyDataSource = new rally.sdk.data.RallyDataSource(
-                            '__WORKSPACE_OID__',
-                               '__PROJECT_OID__',
-                               '__PROJECT_SCOPING_UP__',
-                               '__PROJECT_SCOPING_DOWN__');
+                                            '__WORKSPACE_OID__',
+                                               '__PROJECT_OID__',
+                                               '__PROJECT_SCOPING_UP__',
+                                               '__PROJECT_SCOPING_DOWN__');
 
                     rallyDataSource.setApiVersion('1.37');
 
-                    currentNumWeeks = DEFAULT_NUM_WEEKS;                    
+                    currentNumWeeks = DEFAULT_NUM_WEEKS;
                     loadData(currentNumWeeks)
                 }
 
                 rally.addOnLoad(onLoad);
             };
         }
-    </script>
 
-    <style type="text/css">
-    </style>
-
-    <script type="text/javascript">
         function onLoad() {
             var featureThroughput = new PortfolioItemThroughput();
             featureThroughput.display(dojo.body());
@@ -226,14 +325,16 @@
                 appHeader.parentNode.removeChild(appHeader);
             }
         }
+
         rally.addOnLoad(onLoad);
+
     </script>
 </head>
-<body>   
+<body>
     <div id="chart" style="height: 400px; width: 100%"></div>
     <div id="stories"></div>
     <div>
-        <table style="width: 40%">
+        <table style="width: 200px">
             <thead style="font-weight: bold;">
                 <tr>
                     <td>
@@ -244,8 +345,8 @@
                     </td>
                 </tr>
             </thead>
-            <tbody>
-                <tr>
+            <tbody style="text-align: center;">
+                <tr class="None">
                     <td>
                         None
                     </td>
@@ -253,7 +354,7 @@
                         0 or Not set
                     </td>
                 </tr>
-                <tr>
+                <tr class="X-Small">
                     <td>
                         X-Small
                     </td>
@@ -261,7 +362,7 @@
                         0 > X <= 3
                     </td>
                 </tr>
-                <tr>
+                <tr class="Small">
                     <td>
                         Small
                     </td>
@@ -269,7 +370,7 @@
                         3 > X <= 5
                     </td>
                 </tr>
-                <tr>
+                <tr class="Medium">
                     <td>
                         Medium
                     </td>
@@ -277,7 +378,7 @@
                         5 > X <= 11
                     </td>
                 </tr>
-                <tr>
+                <tr class="Large">
                     <td>
                         Large
                     </td>
@@ -285,7 +386,7 @@
                         11 > X <= 19
                     </td>
                 </tr>
-                <tr>
+                <tr class="X-Large">
                     <td>
                         X-Large
                     </td>
