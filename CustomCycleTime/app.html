@@ -134,62 +134,66 @@
 
             Ext.each(records, function (rec) {
 
-                if (rec.get('ScheduleState') === 'Accepted') {
+                if (!(rec.get('ScheduleState') === 'Accepted')) {
+                    return;
+                }
 
-                    var oid = rec.get('ObjectID');
+                var oid = rec.get('ObjectID');
 
-                    if (!cycleTimes.hasOwnProperty(oid)) {
+                if (cycleTimes.hasOwnProperty(oid)) {
+                    return; // already processed
+                }
 
-                        cycleTimes[oid] = 0;
+                cycleTimes[oid] = 0;
 
-                        var recordFilter = Ext.Array.filter(records, function (record) {
-                            return oid === record.get('ObjectID');
-                        });
+                var recordFilter = Ext.Array.filter(records, function (record) {
+                    return oid === record.get('ObjectID');
+                });
 
-                        if (recordFilter.length > 1) { // we must already have 1 so make sure there is another
-                            var accepteds = Ext.Array.filter(recordFilter, function (record) {
-                                return record.get('ScheduleState') === 'Accepted';
-                            });
+                if (recordFilter.length <= 1) { // we must already have 1 so make sure there is another
+                    return;
+                }
 
-                            var inprogresss = Ext.Array.filter(recordFilter, function (record) {
-                                return record.get('ScheduleState') === 'In-Progress';
-                            });
+                var accepteds = Ext.Array.filter(recordFilter, function (record) {
+                    return record.get('ScheduleState') === 'Accepted';
+                });
 
-                            if (accepteds.length > 0 && inprogresss.length > 0) {
+                var inprogresss = Ext.Array.filter(recordFilter, function (record) {
+                    return record.get('ScheduleState') === 'In-Progress';
+                });
 
-                                var lastAccepted = Ext.Array.max(accepteds, function (a, b) {
-                                    return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
-                                });
+                if (accepteds.length > 0 && inprogresss.length > 0) {
 
-                                var acceptedValidFrom = new Date(lastAccepted.get('AcceptedDate'));
+                    var lastAccepted = Ext.Array.max(accepteds, function (a, b) {
+                        return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
+                    });
 
-                                var progressValidFrom = new Date(Ext.Array.min(inprogresss, function (a, b) {
-                                    return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
-                                }).get('_ValidFrom'));
+                    var acceptedValidFrom = new Date(lastAccepted.get('AcceptedDate'));
 
-                                var progressMax = new Date(Ext.Array.max(inprogresss, function (a, b) {
-                                    return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
-                                }).get('_ValidFrom'));
+                    var progressValidFrom = new Date(Ext.Array.min(inprogresss, function (a, b) {
+                        return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
+                    }).get('_ValidFrom'));
 
-                                if (progressMax > acceptedValidFrom) { // if it has moved out of accepted but not yet been re-accepted then dont count it
-                                    return;
-                                }
+                    var progressMax = new Date(Ext.Array.max(inprogresss, function (a, b) {
+                        return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
+                    }).get('_ValidFrom'));
 
-                                var cycleTime = Math.abs(Rally.util.DateTime.getDifference(progressValidFrom, acceptedValidFrom, 'hour'));
-                                //console.log(rec.get('FormattedID') + ": " + cycleTime);
+                    if (progressMax > acceptedValidFrom) { // if it has moved out of accepted but not yet been re-accepted then dont count it
+                        return;
+                    }
 
-                                var date = this._getSunday(acceptedValidFrom);
+                    var cycleTime = Math.abs(Rally.util.DateTime.getDifference(progressValidFrom, acceptedValidFrom, 'hour'));
+                    //console.log(rec.get('FormattedID') + ": " + cycleTime);
 
-                                if (bins.hasOwnProperty(date)) {
-                                    bins[date].push(cycleTime);
-                                    var key = this._dateToYMD(new Date(date));
-                                    if (this.rawData[key] == null) {
-                                        this.rawData[key] = [];
-                                    }
-                                    this.rawData[key].push([rec.get('FormattedID'), lastAccepted, progressValidFrom, acceptedValidFrom, (cycleTime / 24)]);
-                                }
-                            }
+                    var date = this._getSunday(acceptedValidFrom);
+
+                    if (bins.hasOwnProperty(date)) {
+                        bins[date].push(cycleTime);
+                        var key = this._dateToYMD(new Date(date));
+                        if (this.rawData[key] == null) {
+                            this.rawData[key] = [];
                         }
+                        this.rawData[key].push([lastAccepted, progressValidFrom, acceptedValidFrom, (cycleTime / 24)]);
                     }
                 }
 
@@ -243,7 +247,6 @@
         },
 
         _getChartData: function () {
-
             Ext.create('Rally.data.lookback.SnapshotStore', {
                 listeners: {
                     load: this._loadData,
@@ -356,29 +359,14 @@
             };
 
             var records = Rally.getApp().rawData[e.currentTarget.category];
-            //var tableRows = "<table class='table'><thead><tr><td>ID</td><td>First In-Progress</td><td>Final Accepted</td><td>Cycle Time (days)</td></thead><tbody>";            
-            //Ext.each(records, function (rec) {
-                //var link = "/#/detail/userstory/" + rec[1].get('ObjectID');
-                //tableRows += "<tr>"
-                //tableRows += "<td><a target='_blank' href='" + link + "' onclick='javascript: return true;'>" + rec[0] + "</a></td>"
-                //tableRows += "<td>" + new Date(rec[2]).toLocaleTimeString("en-au", options) + "</td>";
-                //tableRows += "<td>" + new Date(rec[3]).toLocaleTimeString("en-au", options) + "</td>";
-                //tableRows += "<td>" + rec[4].toFixed(1) + "</td>";
-                //tableRows += "</tr>";
-            //});
-            //tableRows += "</tbody><tfoot><tr><td colspan='4'>Average: " + (average / records.length).toFixed(1) + "</td></tr></tfoot></table>";
-
-            debugger;
-
             var average = 0;
             var data = [];
             Ext.each(records, function (rec) {
-                var link = "/#/detail/userstory/" + rec[1].get('ObjectID');
                 data.push({
                     'Item': rec,
-                    'First In-Progress': new Date(rec[2]).toLocaleTimeString("en-au", options),
-                    'Final Accepted': new Date(rec[3]).toLocaleTimeString("en-au", options),
-                    'Cycle Time (days)': rec[4].toFixed(1)
+                    'First In-Progress': new Date(rec[1]).toLocaleTimeString("en-au", options),
+                    'Final Accepted': new Date(rec[2]).toLocaleTimeString("en-au", options),
+                    'Cycle Time (days)': rec[3].toFixed(1)
                 });
                 average += rec[4];
             });
@@ -399,8 +387,8 @@
                         text: 'Item',
                         dataIndex: 'Item',
                         renderer: function (rec) {
-                            var link = "/#/detail/userstory/" + rec[1].get('ObjectID');
-                            return Ext.String.format('<a target="_blank" href="{0}">{1}</a>', link, rec[0]);
+                            var link = "/#/detail/userstory/" + rec[0].get('ObjectID');
+                            return Ext.String.format('<a target="_blank" href="{0}">{1}</a>', link, rec[0].get('FormattedID'));
                         }
                     },
                     {
