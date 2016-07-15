@@ -214,7 +214,12 @@
                 resizable: true,
                 width: "460px",
                 title: 'Stories in week ' + e.currentTarget.category,
-                items: [container]
+                items: [container],
+                listeners: {
+                    close: function (e, o) {
+                        app.refresh();
+                    }
+                }
             });
         },
 
