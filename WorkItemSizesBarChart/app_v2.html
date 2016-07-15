@@ -230,7 +230,9 @@
         },
 
         _loadData: function (store, records, success) {
-            if (!success) return;
+            console.log("Loading data for WorkSizeThroughput app (" + success + ")");
+
+            if (!success) return;            
 
             this.rawData = records;
 
@@ -287,7 +289,10 @@
 
         _updateChart: function (data, averages, trend) {
             var hc = this.chart.down('highchart').chart;
-            if (!hc) return;
+            if (!hc) {
+                debugger;
+                return;
+            }
 
             Ext.each(this._getSeriesNames(), function (name) {
                 var container = hc.series.find(function (a) { return a.name === name; });
@@ -388,21 +393,37 @@
 
         _buttonClick: function (e) {
             var app = Rally.getApp();
-            var html = '<table><thead style="font-weight: bold;"><tr><td>Name</td><td>Planned Estimated</td></tr></thead><tbody style="text-align: center;">' + 
-                '<tr class="None"><td>None</td><td>0 or Not set</td></tr>' + 
-                '<tr class="X-Small"><td>X-Small</td><td>0 > X <= 3 </td></tr>'+
-                '<tr class="Small"><td>Small</td><td>3 > X <= 5</td></tr>'  +
-                '<tr class="Medium"><td>Medium</td><td>5 > X <= 11</td></tr>'  +
-                '<tr class="Large"><td>Large</td><td>11 > X <= 19</td></tr>' +
-                '<tr class="X-Large"><td>X-Large</td><td>19 > X</td></tr>' +
-                '</tbody></table>';
+
+            var hc = app.chart.down('highchart').chart;
+            var style = "";
+            if (hc) {
+                style += "<style type='text/css'> td { padding: 5px; } ";
+                Ext.each(app._getSeriesNames(), function (name) {
+                    var container = hc.series.find(function (a) { return a.name === name; });
+                    style += "." + name + " { width: 20px; background-color: " + container.color + "; } ";
+                });
+                style += "</style>";
+            }
+
+            var html = style + '<div>' +
+                '<table style="color: black; font-size: 11px; font-weight: normal; font-family: NotoSans,Helvetica,Arial;">' +
+                '<thead style="font-weight: bold;"><tr><td>&nbsp;</td><td>Name</td><td>Planned Estimated</td></tr></thead><tbody>' +
+                '<tr><td class="None">&nbsp;</td><td>None</td><td>0 or Not set</td></tr>' +
+                '<tr><td class="X-Small">&nbsp;</td><td>X-Small</td><td>0 > X <= 3 </td></tr>' +
+                '<tr><td class="Small">&nbsp;</td><td>Small</td><td>3 > X <= 5</td></tr>' +
+                '<tr><td class="Medium">&nbsp;</td><td>Medium</td><td>5 > X <= 11</td></tr>' +
+                '<tr><td class="Large">&nbsp;</td><td>Large</td><td>11 > X <= 19</td></tr>' +
+                '<tr><td class="X-Large">&nbsp;</td><td>X-Large</td><td>19 > X</td></tr>' +
+                '</tbody>' +
+                '</table>' +
+                '</div>';
 
             Ext.create('Rally.ui.dialog.Dialog', {
                 autoShow: true,
                 draggable: true,
                 closable: true,
                 width: 300,
-                title: 'Legend',
+                title: 'Information',
                 items: {
                     xtype: 'component',
                     html: html,
@@ -418,11 +439,7 @@
 
         refresh: function () {
             var app = Rally.getApp();
-
-            var hc = this.chart.down('highchart').chart;
-            if (!hc) return;
-
-            hc.redraw();
+            app._getChartData();
         },
 
         launch: function () {
