@@ -172,7 +172,7 @@
             };
 
             var container = Ext.create('Rally.ui.grid.Grid', {
-                width: '450px',
+                width: '100%',
                 frame: true,
                 store: Ext.create('Rally.data.custom.Store', {
                     data: data,
@@ -213,6 +213,9 @@
                 closable: true,
                 resizable: true,
                 width: "460px",
+                style: {
+                    'min-width': "460px",
+                },
                 title: 'Stories in week ' + e.currentTarget.category,
                 items: [container],
                 listeners: {
