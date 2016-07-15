@@ -29,7 +29,7 @@
             font-weight: bold;
         }
 </style>
-<script type="text/javascript" src="/apps/2.0rc1/sdk.js"></script>
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
 <script>
 
     function LineFitter() {
@@ -121,6 +121,10 @@
         },
 
         _loadData: function (store, records, success) {
+            console.log("Loading data for RealCycleTime app (" + success + ")");
+
+            if (!success) return;
+
             var cycleTimes = {};
             var bins = {};
 
@@ -233,6 +237,7 @@
             }
 
             var hc = this.chart.down('highchart').chart;
+            if (!hc) return;
 
             var cycleTimeDataContainer = hc.series.find(function (a) { return a.name === "Cycle time"; });
             cycleTimeDataContainer.setData(data);
@@ -312,7 +317,7 @@
                     text: 'Cycle Time For past 12 weeks'
                 },
                 subtitle: {
-                    text: '<div style="font-size: 12px;">Time from when item is first moved to "In-Progress" to when it is finally "Accepted"</div><div style="font-size: 9px;">If an item is moved back out of "Accepted" then only the final time is counted, if not "Accepted" again then not counted.<br/>Accepted date is used to determine which week the cycle time ended.</div>',
+                    text: '<div style="font-size: 12px;">Time from when item is first moved to "In-Progress" to when it is finally "Accepted"</div>',
                     useHTML: true
                 },
                 xAxis: {
@@ -460,10 +465,51 @@
             };
         },
 
+        _buttonClick: function (e) {
+            var app = Rally.getApp();
+            var html = '<div>If an item is moved back out of "Accepted" then only the final time is counted, if not "Accepted" again then not counted.</div><br/><div>Accepted date is used to determine which week the cycle time ended.</div>';
+
+            Ext.create('Rally.ui.dialog.Dialog', {
+                autoShow: true,
+                draggable: true,
+                closable: true,
+                width: 300,
+                title: 'Information',
+                items: {
+                    xtype: 'component',
+                    html: html,
+                    padding: 10
+                },
+                listeners: {
+                    close: function (e, o) {
+                        app.refresh();
+                    }
+                }
+            });
+        },
+
+        refresh: function () {
+            var app = Rally.getApp();
+            app._getChartData();
+        },
+
         launch: function () {
 
             this.startDate = Rally.util.DateTime.add(this._getSunday(new Date()), "day", (0 - parseInt(this.getSetting('Number of Weeks'))) * 7);
             this.endDate = this._getSunday(new Date());
+
+            var button = Ext.create('Rally.ui.Button', {
+                text: 'Information',
+                handler: this._buttonClick,
+                style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    'z-index': 199
+                }
+            });
+
+            this.add(button);
 
             this.chart = Ext.create('Rally.ui.chart.Chart', {
                 loadMask: false,
