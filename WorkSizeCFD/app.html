@@ -1,4 +1,4 @@
-<meta name="Name" content="App: RealCycleTime" />
+<meta name="Name" content="App: WorkTypeChartApp" />
 <meta name="Version" content="2016.07.12" />
 <meta name="Vendor" content="maddogmikeb" />
 
@@ -85,9 +85,50 @@
             return value;
         },
 
+        _buttonClick: function (e) {
+            var app = Rally.getApp();
+
+            Ext.create('Rally.ui.dialog.Dialog', {
+                autoShow: true,
+                draggable: true,
+                closable: true,
+                width: 300,
+                title: 'Information',
+                items: {
+                    xtype: 'component',
+                    html: '<div>Cumlative flow of work types over the past 12 weeks.</div>',
+                    padding: 10
+                },
+                listeners: {
+                    close: function (e, o) {
+                        app.refresh();
+                    }
+                }
+            });
+        },
+
+        refresh: function () {
+            var app = Rally.getApp();
+            window.location.reload(true);
+            //app._getChartData();
+        },
+
         launch: function () {
             this.startDate = Rally.util.DateTime.add(this._getSunday(new Date()), "day", (0 - parseInt(this.getSetting('Number of Weeks'))) * 7);
             this.endDate = this._getSunday(new Date());
+
+            var button = Ext.create('Rally.ui.Button', {
+                text: 'Information',
+                handler: this._buttonClick,
+                style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    'z-index': 199
+                }
+            });
+
+            this.add(button);
 
             var model = Rally.data.ModelFactory.getModel({
                 type: 'UserStory',
