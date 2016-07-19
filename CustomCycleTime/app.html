@@ -317,7 +317,7 @@
                     text: 'Cycle Time For past 12 weeks'
                 },
                 subtitle: {
-                    text: '<div style="font-size: 12px;">Time from when item is first moved to "In-Progress" to when it is finally "Accepted"</div>',
+                    text: '<div style="font-size: 12px;">A trend down is generally better.</div>',
                     useHTML: true
                 },
                 xAxis: {
@@ -476,7 +476,7 @@
 
         _buttonClick: function (e) {
             var app = Rally.getApp();
-            var html = '<div>If an item is moved back out of "Accepted" then only the final time is counted, if not "Accepted" again then not counted.</div><br/><div>Accepted date is used to determine which week the cycle time ended.</div>';
+            var html = '<div>If an item is moved back out of "Accepted" then only the final time is counted, if not "Accepted" again then not counted.</div><br/><div>Accepted date is used to determine which week the cycle time ended.</div></br><div>Time from when item is first moved to "In-Progress" to when it is finally "Accepted".</div>';
 
             Ext.create('Rally.ui.dialog.Dialog', {
                 autoShow: true,
