@@ -1,0 +1,180 @@
+<meta name="Name" content="App: WorkTypeChartApp" />
+<meta name="Version" content="2016.07.12" />
+<meta name="Vendor" content="maddogmikeb" />
+
+<script type="text/javascript" src="/apps/2.0/sdk.js?debug=true"></script>
+<script type="text/javascript" src="/apps/2.0/lib/analytics/analytics-all.js"></script>
+<script type="text/javascript" src="https://code.highcharts.com/modules/funnel.js"></script>
+<script type="text/javascript">
+
+    Ext.define('PortfolioFunnelApp', {
+        extend: 'Rally.app.App',
+        settingsScope: 'app',
+
+        chart: null,
+
+        config: {
+            defaultSettings: {
+            }
+        },
+
+        _buttonClick: function (e) {
+            var app = Rally.getApp();
+
+            Ext.create('Rally.ui.dialog.Dialog', {
+                autoShow: true,
+                draggable: true,
+                closable: true,
+                width: 300,
+                title: 'Information',
+                items: {
+                    xtype: 'component',
+                    html: '<div></div>',
+                    padding: 10
+                },
+                listeners: {
+                    close: function (e, o) {
+                        app.refresh();
+                    }
+                }
+            });
+        },
+
+        refresh: function () {
+            var app = Rally.getApp();
+            app.chart.destroy();
+            app._loadData();
+        },
+
+        launch: function () {
+            var button = Ext.create('Rally.ui.Button', {
+                text: 'Loading...',
+                handler: function () { },
+                style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    'z-index': 199
+                }
+            });
+
+            this.add(button);
+
+            this._loadData();
+        },
+
+        _afterRender: function () {
+            Rally.getApp()._updateButtonText(false);
+        },
+
+        _updateButtonText: function (isLoading) {
+            var button = Rally.getApp().down('button');
+            if (!button) {
+                return;
+            }
+            if (isLoading) {
+                button.handler = function () { };
+                button.setText("Loading...");
+            } else {
+                button.handler = Rally.getApp()._buttonClick;
+                button.setText("Information");
+            }
+        },
+
+        _loadData: function () {
+
+            var app = Rally.getApp();
+            if (app.chart) app.chart.destroy();
+
+            Ext.create('Rally.data.wsapi.Store', {
+                model: 'PortfolioItem/Portfolio',
+                autoLoad: true,
+                listeners: {
+                    load: app._updateChart
+                },
+                fetch: ['Name', 'State'],
+                context: this.getContext().getDataContext(),
+                limit: Infinity
+            });
+
+            app._updateButtonText(true);
+        },
+
+        _updateChart: function (store, data, success) {
+            var app = Rally.getApp();
+
+            var d = [
+                ['No Entry', 0],
+                ['Idea', 0],
+                ['Concept', 0],
+                ['Initiate', 0],
+                ['Deliver', 0],
+                ['Learn and Adjust', 0],
+                ['Done', 0]
+            ];
+
+            Ext.each(data, function (record) {
+                Ext.each(d, function (r) {
+                    var state = 'No Entry';
+                    if (record.data.State && record.data.State.Name) {
+                        state = record.data.State.Name;
+                    }
+                    if (r[0] === state) {
+                        r[1] += 1;
+                    }
+                }, this);
+            }, this);
+
+            app.chart = Ext.create('Rally.ui.chart.Chart', {
+                loadMask: false,
+                chartData: app._getChartData(d),
+                chartConfig: app._getChartConfig(),
+                updateAfterRender: app._afterRender
+            });
+
+            app.add(app.chart);
+
+            app._updateButtonText(false);
+        },
+
+        _getChartData: function (data) {
+            return {
+                series: [{
+                    name: 'Portfolio Item',
+                    data: data
+                }]
+            };
+        },
+
+        _getChartConfig: function () {
+            return {
+                chart: {
+                    type: 'funnel'
+                },
+                title: {
+                    text: 'Portfolio Funnel'
+                },
+                subtitle: {
+                    text: "<div style='font-size: 12px;'>.</div>",
+                    useHTML: true
+                },
+                legend: {
+                    enabled: false
+                },
+                plotOptions: {
+                    series: {
+                        neckWidth: '30%',
+                        neckHeight: '25%'
+                    }
+                }
+            };
+        }
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('PortfolioFunnelApp', {
+            name: 'Portfolio Funnel App'
+        });
+    });
+
+</script>
