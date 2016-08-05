@@ -36,7 +36,11 @@
         height: 15px !important;
     }
 
-    .printable .card-owner-field {
+    .card-owner-field {
+        display: none !important;
+    }
+
+    .owner-name {
         display: none !important;
     }
 
@@ -471,7 +475,11 @@
                 return {
                     showIconsAndHighlightBorder: false,
                     editable: false,
-                    showColorIcon: true
+                    showPlusIcon: false,
+                    showGearIcon: false,
+                    showColorIcon: false,
+                    showReadyIcon: false,
+                    showBlockedIcon: false,
                 };
             },
 
@@ -482,7 +490,14 @@
 
                 if (this.getSetting('query')) {
                     try {
-                        filters.push(Rally.data.QueryFilter.fromQueryString(this.getSetting('query')));
+                        var user = Rally.environment.getContext().getUser().getDisplayString();
+                        var project = Rally.environment.getContext().getProject();
+                        var q = this.getSetting('query');
+                        q = q
+                            .replace("{projectName}", project.Name)
+                            .replace("{projectOid}", project.OID)
+                            .replace("{user}", user);                        
+                        filters.push(Rally.data.QueryFilter.fromQueryString(q));
                     } catch (e) {
                         Rally.ui.notify.Notifier.showError({ message: e.message });
                     }
@@ -751,6 +766,11 @@
 
             config: {
                 showIconsAndHighlightBorder: false,
+                showPlusIcon: false,
+                showGearIcon: false,
+                showColorIcon: false,
+                showReadyIcon: false,
+                showBlockedIcon: false,
                 customFieldConfig: {
                     UserStories: {
                         fetch: ['UserStories', 'LeafStoryPlanEstimateTotal', 'LeafStoryCount'],
