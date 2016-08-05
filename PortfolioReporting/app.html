@@ -1,0 +1,959 @@
+<script type="text/javascript" src="/apps/2.1/sdk.js"></script>
+<style>
+    @media print {
+        .noprint {
+            display: none;
+        }
+
+        @page {
+            size: A3 landscape;
+        }
+
+        html, body {
+            height: 99%;
+            background-color: #FFFFFF;
+            margin: 0px;
+        }
+
+        * {
+            -webkit-print-color-adjust: exact;
+        }
+
+        .rui-card {
+            page-break-inside: avoid;
+        }
+    }
+
+    .progress-bar-container {
+        height: 15px !important;
+    }
+
+    .printable td.card-column {
+        background-color: transparent !important;
+    }
+
+    .printable .progress-bar-container.field-PercentDoneByStoryCount.clickable {
+        height: 15px !important;
+    }
+
+    .printable .card-owner-field {
+        display: none !important;
+    }
+
+    .printable .x-container.rui-leftright.x-container-default {
+        display: none !important;
+    }
+
+    .printable .expand-collapse {
+        display: none !important;
+    }
+
+    .printable .rally-card-icons {
+        display: none !important;
+    }
+
+    .printable .portfolio-item-type-combo {
+        display: none !important;
+    }
+
+    .printable .rly-left {
+        display: none !important;
+    }
+
+
+    .StateChangedDate {
+        display: none !important;
+    }
+
+    .fixed-header-card-board-body-container {
+        overflow-y: visible;
+    }
+
+    .portfolio-items-grid-board-app, .portfolio-item-type-combo {
+        margin-top: -3px;
+    }
+
+    .portfolio-kanban {
+        overflow-y: hidden;
+    }
+
+        .portfolio-kanban.full-page-app {
+            overflow-x: auto !important;
+        }
+
+        .portfolio-kanban .no-type-text {
+            text-align: center;
+        }
+
+        .portfolio-kanban .typeCombo {
+            float: right;
+        }
+
+        .portfolio-kanban .readyIndicator {
+            visibility: hidden;
+        }
+
+        .portfolio-kanban .timeInState {
+            border-top: 1px dotted #CCC;
+            color: #666;
+            margin-top: 5px;
+            padding-top: 5px;
+        }
+
+        .portfolio-kanban .showPolicies {
+            font-family: ProximaNovaSemiBold, Helvetica, Arial;
+            font-weight: normal;
+            float: right;
+            margin: 1px 10px 6px 0;
+        }
+
+            .portfolio-kanban .showPolicies label {
+                position: relative;
+                top: 1px;
+                margin-top: 0;
+                padding-left: 4px;
+            }
+
+            .portfolio-kanban .showPolicies .showPoliciesCheckbox {
+                position: relative;
+                margin-top: 0;
+            }
+
+        .portfolio-kanban .settingsHeader {
+            float: left;
+            color: gray;
+            padding: 1px 0 0 10px;
+        }
+
+            .portfolio-kanban .settingsHeader b {
+                padding-right: 5px;
+            }
+
+        .portfolio-kanban .help-field {
+            float: right;
+        }
+
+        .portfolio-kanban .field-picker-btn {
+            height: 22px;
+            margin-top: 3px;
+        }
+
+    .portfolio-item-type-combo {
+        display: none;
+    }
+</style>
+
+<script type="text/javascript">
+    (function () {
+
+        var Ext = window.Ext4 || window.Ext;
+
+        Ext.define('Rally.apps.common.PortfolioItemsGridBoardApp', {
+            extend: 'Rally.app.GridBoardApp',
+
+            requires: [
+                'Rally.data.Ranker',
+                'Rally.ui.cardboard.plugin.CollapsibleColumns',
+                'Rally.ui.cardboard.plugin.FixedHeader',
+                'Rally.ui.gridboard.plugin.GridBoardInlineFilterControl',
+                'Rally.ui.gridboard.plugin.GridBoardSharedViewControl',
+                'Rally.ui.notify.Notifier'
+            ],
+
+            mixins: [
+                'Rally.ui.cardboard.plugin.Print'
+            ],
+
+            constructor: function (config) {
+                var defaultConfig = {
+                    piTypePickerConfig: {
+                        renderInGridHeader: false
+                    }
+                };
+
+                this.callParent([Ext.Object.merge(defaultConfig, config)]);
+            },
+
+            initComponent: function () {
+                this.callParent(arguments);
+                this.addCls('portfolio-items-grid-board-app');
+            },
+
+            getHeader: function () {
+                return '';
+            },
+
+            getContent: function () {
+                var r = this.mixins["Rally.ui.cardboard.plugin.Print"].getContent.call(this);
+                r = r
+                        .replace(/("|\s)height:.\d+px;/g, '/* height: removed/*')
+                        .replace(/\sof\s∞/g, '');
+                debugger;
+
+                var headermatch = /\<div\sclass=\"fixed-header-card-board-header-container\".*?>(.*?)<\/div><div\sclass=\"fixed-header-card-board-body-container\".*?>/ig;
+                var header = r.match(headermatch);
+                r = r.replace(headermatch, '<div class="fixed-header-card-board-body-container">' + header);
+
+                return "<div class='printable'>" + r + "</div>";
+            },
+
+            _footerTpl: Ext.create("Ext.Template", '<div class="footer">', '<div class="printed-by">Printed by {user} at {datetime}</div>', '<div class="powered-by">Powered by {company} for {thiscompany}</div><div>{logo}</div>', "</div>", {
+                compiled: !0
+            }),
+
+            getFooter: function () {
+                //var r = this.mixins["Rally.ui.cardboard.plugin.Print"].getFooter.call(this);
+
+                var tattsLogo = "<img src='data:image/png;base64,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'>";
+                var user = Rally.environment.getContext().getUser().getDisplayString();
+                return this._footerTpl.apply({
+                    user: user,
+                    datetime: (new Date()).toISOString(),
+                    company: "CA Technologies",
+                    thiscompany: "Tatts Group",
+                    logo: tattsLogo
+                })
+            },
+
+            getOptions: function () {
+                var printMenu = this.getPrintMenuOption({ title: 'Activity Report' });
+                /** SHIM **/
+                /*
+                printMenu._handlerold = printMenu.handler;
+                printMenu.handler = function(menuItem, eventObjectImpl) {
+                    debugger;
+                    menuItem._handlerold.apply(this, arguments);
+                }
+                */
+                return [printMenu]; //from printable mixin
+            },
+
+            getAddNewConfig: function () {
+                var config = {};
+                if (this.getContext().isFeatureEnabled('S105843_UPGRADE_TO_NEWEST_FILTERING_SHARED_VIEWS_ON_PORTFOLIO_ITEMS_AND_KANBAN')) {
+                    config.margin = 0;
+                }
+
+                return _.merge(this.callParent(arguments), config);
+            },
+
+            addGridBoard: function () {
+                if (this.gridboard && this.piTypePicker && this.piTypePicker.rendered) {
+                    var parent = this.piTypePicker.up();
+                    if (parent && parent.remove) {
+                        parent.remove(this.piTypePicker, false);
+                    }
+                }
+                this.callParent(arguments);
+            },
+
+            launch: function () {
+                if (Rally.environment.getContext().getSubscription().isModuleEnabled('Rally Portfolio Manager')) {
+                    this.callParent(arguments);
+                } else {
+                    this.add({
+                        xtype: 'container',
+                        html: '<div class="rpm-turned-off" style="padding: 50px; text-align: center;">You do not have RPM enabled for your subscription</div>'
+                    });
+
+                    this.publishComponentReady();
+                }
+            },
+
+            loadModelNames: function () {
+                return this._createPITypePicker().then({
+                    success: function (selectedType) {
+                        this.currentType = selectedType;
+                        return [selectedType.get('TypePath')];
+                    },
+                    scope: this
+                });
+            },
+
+            getGridBoardCustomFilterControlConfig: function () {
+                var context = this.getContext(),
+                    skinnyFilter = !!context.isFeatureEnabled('F10466_INLINE_FILTER_UI_ENHANCEMENTS');
+
+                if (context.isFeatureEnabled('S105843_UPGRADE_TO_NEWEST_FILTERING_SHARED_VIEWS_ON_PORTFOLIO_ITEMS_AND_KANBAN')) {
+                    return {
+                        ptype: 'rallygridboardinlinefiltercontrol',
+                        inline: skinnyFilter,
+                        skinny: skinnyFilter,
+                        inlineFilterButtonConfig: {
+                            stateful: true,
+                            stateId: context.getScopedStateId('portfolio-items-inline-filter'),
+                            legacyStateIds: [
+                                this.getScopedStateId('owner-filter'),
+                                this.getScopedStateId('custom-filter-button')
+                            ],
+                            filterChildren: true,
+                            modelNames: this.modelNames,
+                            inlineFilterPanelConfig: {
+                                quickFilterPanelConfig: {
+                                    defaultFields: [
+                                        'ArtifactSearch',
+                                        'Owner'
+                                    ],
+                                    addQuickFilterConfig: {
+                                        blackListFields: ['PortfolioItemType', 'ModelType'],
+                                        whiteListFields: ['Milestones', 'Tags']
+                                    }
+                                },
+                                advancedFilterPanelConfig: {
+                                    advancedFilterRowsConfig: {
+                                        propertyFieldConfig: {
+                                            blackListFields: ['PortfolioItemType'],
+                                            whiteListFields: ['Milestones', 'Tags']
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+                }
+
+                return {
+                    blackListFields: ['PortfolioItemType'],
+                    whiteListFields: ['Milestones']
+                };
+            },
+
+            getSharedViewConfig: function () {
+                var context = this.getContext();
+                if (context.isFeatureEnabled('S105843_UPGRADE_TO_NEWEST_FILTERING_SHARED_VIEWS_ON_PORTFOLIO_ITEMS_AND_KANBAN')) {
+                    return {
+                        ptype: 'rallygridboardsharedviewcontrol',
+                        sharedViewConfig: {
+                            stateful: true,
+                            stateId: this.getContext().getScopedStateId('portfolio-items-shared-view'),
+                            defaultViews: _.map(this._getDefaultViews(), function (view) {
+                                Ext.apply(view, {
+                                    Value: Ext.JSON.encode(view.Value, true)
+                                });
+                                return view;
+                            }, this),
+                            enableUrlSharing: this.isFullPageApp !== false,
+                            suppressViewNotFoundNotification: this._suppressViewNotFoundNotification
+                        },
+                        additionalFilters: [{
+                            property: 'Value',
+                            operator: 'contains',
+                            value: '"piTypePicker":"' + this.piTypePicker.getRecord().get('_refObjectUUID') + '"'
+                        }]
+                    };
+                }
+
+                return {};
+            },
+
+            getFieldPickerConfig: function () {
+                return _.merge(this.callParent(arguments), {
+                    boardFieldBlackList: ['Predecessors', 'Successors']
+                });
+            },
+
+            getGridBoardConfig: function () {
+                return _.merge(this.callParent(arguments), {
+                    listeners: {
+                        viewchange: this._onViewChange,
+                        scope: this
+                    },
+                    sharedViewAdditionalCmps: [this.piTypePicker]
+                });
+            },
+
+            getCardBoardColumns: function () {
+                return this._getStates().then({
+                    success: function (states) {
+                        return this._buildColumns(states);
+                    },
+                    scope: this
+                });
+            },
+
+            _buildColumns: function (states) {
+                if (!states.length) {
+                    return undefined;
+                }
+
+                var columns = [
+                    {
+                        columnHeaderConfig: {
+                            headerTpl: 'No Entry'
+                        },
+                        value: null,
+                        plugins: ['rallycardboardcollapsiblecolumns']
+                    }
+                ];
+
+                return columns.concat(_.map(states, function (state) {
+                    return {
+                        value: state.get('_ref'),
+                        wipLimit: state.get('WIPLimit'),
+                        enableWipLimit: true,
+                        columnHeaderConfig: {
+                            record: state,
+                            fieldToDisplay: 'Name',
+                            editable: false
+                        },
+                        plugins: ['rallycardboardcollapsiblecolumns']
+                    };
+                }, this));
+            },
+
+            _getStates: function () {
+                var deferred = new Deft.Deferred();
+                Ext.create('Rally.data.wsapi.Store', {
+                    model: Ext.identityFn('State'),
+                    context: this.getContext().getDataContext(),
+                    autoLoad: true,
+                    fetch: ['Name', 'WIPLimit', 'Description'],
+                    filters: [
+                        {
+                            property: 'TypeDef',
+                            value: this.currentType.get('_ref')
+                        },
+                        {
+                            property: 'Enabled',
+                            value: true
+                        }
+                    ],
+                    sorters: [
+                        {
+                            property: 'OrderIndex',
+                            direction: 'ASC'
+                        }
+                    ],
+                    listeners: {
+                        load: function (store, records) {
+                            deferred.resolve(records);
+                        }
+                    }
+                });
+                return deferred.promise;
+            },
+
+            _getDefaultViews: function () {
+                if (this.toggleState === 'grid') {
+                    var rankColumnDataIndex = this.getContext().getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled ?
+                            Rally.data.Ranker.RANK_FIELDS.DND : Rally.data.Ranker.RANK_FIELDS.MANUAL,
+                        defaultViewName = this.piTypePicker.getRawValue() + ' Default',
+                        columns = [
+                            { dataIndex: rankColumnDataIndex },
+                            { dataIndex: 'Name' },
+                            { dataIndex: 'State' },
+                            { dataIndex: 'PercentDoneByStoryCount' },
+                            { dataIndex: 'PlannedStartDate' },
+                            { dataIndex: 'PlannedEndDate' },
+                            { dataIndex: 'Project' }
+                        ],
+                        ordinalValue = this.piTypePicker.getRecord().get('Ordinal') + 1;
+
+                    if (ordinalValue === 1) {
+                        columns.push({ dataIndex: 'Release' });
+                    }
+
+                    return [{
+                        Name: defaultViewName,
+                        identifier: ordinalValue,
+                        Value: {
+                            toggleState: 'grid',
+                            columns: columns,
+                            sorters: [{ property: rankColumnDataIndex, direction: 'ASC' }]
+                        }
+                    }];
+                }
+
+                return [];
+            },
+
+            getCardConfig: function () {
+                return {
+                    showIconsAndHighlightBorder: false,
+                    editable: false,
+                    showColorIcon: true
+                };
+            },
+
+            getCardBoardConfig: function (options) {
+                options = options || {};
+                var currentTypePath = this.currentType.get('TypePath');
+                var filters = [];
+
+                if (this.getSetting('query')) {
+                    try {
+                        filters.push(Rally.data.QueryFilter.fromQueryString(this.getSetting('query')));
+                    } catch (e) {
+                        Rally.ui.notify.Notifier.showError({ message: e.message });
+                    }
+                }
+
+                return {
+                    attribute: 'State',
+                    cardConfig: this.getCardConfig(),
+                    columnConfig: {
+                        xtype: 'rallycardboardcolumn',
+                        enableWipLimit: false,
+                        fields: (this.getSetting('fields') || '').split(',')
+                    },
+                    columns: options.columns,
+                    ddGroup: currentTypePath,
+                    listeners: {
+                        load: this.publishComponentReady,
+                        cardupdated: this._publishContentUpdatedNoDashboardLayout,
+                        scope: this
+                    },
+                    plugins: [{ ptype: 'rallyfixedheadercardboard' }],
+                    storeConfig: {
+                        pageSize: 200,
+                        filters: filters,
+                        context: this.getContext().getDataContext()
+                    }
+                };
+            },
+
+            getGridStoreConfig: function () {
+                return _.merge({}, this.gridStoreConfig, { models: this.piTypePicker.getAllTypeNames() });
+            },
+
+            _createPITypePicker: function () {
+                if (this.piTypePicker && this.piTypePicker.destroy) {
+                    this.piTypePicker.destroy();
+                }
+                var deferred = new Deft.Deferred();
+                var piTypePickerConfig = {
+                    preferenceName: this.getStateId('typepicker'),
+                    fieldLabel: '', // delete this when removing PORTFOLIO_ITEM_TREE_GRID_PAGE_OPT_IN toggle. Can't delete these from PI Combobox right now or GUI tests fail in old PI page
+                    labelWidth: 0,  // delete this when removing PORTFOLIO_ITEM_TREE_GRID_PAGE_OPT_IN toggle. Can't delete these from PI Combobox right now or GUI tests fail in old PI page
+                    value: this.getSetting('type'),
+                    context: this.getContext(),
+                    listeners: {
+                        change: this._onTypeChange,
+                        ready: {
+                            fn: function (picker) {
+                                deferred.resolve(picker.getSelectedType());
+                            },
+                            single: true
+                        },
+                        scope: this
+                    },
+                    storeConfig: {
+                        filters: [
+                            {
+                                property: 'TypePath',
+                                operator: '=',
+                                value: 'PortfolioItem/Portfolio'
+                            }
+                        ]
+                    }
+                };
+
+                if (!this.config.piTypePickerConfig.renderInGridHeader) {
+                    piTypePickerConfig.renderTo = Ext.query('#content .titlebar .dashboard-timebox-container')[0];
+                }
+
+                this.piTypePicker = Ext.create('Rally.ui.combobox.PortfolioItemTypeComboBox', piTypePickerConfig);
+
+                if (this.config.piTypePickerConfig.renderInGridHeader) {
+                    this.on('gridboardadded', function () {
+                        var headerContainer = this.gridboard.getHeader().getLeft();
+                        headerContainer.add(this.piTypePicker);
+                    });
+                }
+
+                return deferred.promise;
+            },
+
+            _onTypeChange: function (picker) {
+                Rally.ui.notify.Notifier.hide();
+                var newType = picker.getSelectedType();
+
+                if (this._pickerTypeChanged(picker)) {
+                    this._suppressViewNotFoundNotificationWhenPiTypeChanges();
+
+                    this.currentType = newType;
+                    this.modelNames = [newType.get('TypePath')];
+                    this.gridboard.fireEvent('modeltypeschange', this.gridboard, [newType]);
+                }
+            },
+
+            _suppressViewNotFoundNotificationWhenPiTypeChanges: function () {
+                var plugin = _.find(this.gridboard.plugins, { ptype: 'rallygridboardsharedviewcontrol' });
+                if (plugin && plugin.controlCmp && plugin.controlCmp.getSharedViewParam()) {
+                    this._suppressViewNotFoundNotification = true;
+                }
+            },
+
+            _onViewChange: function () {
+                Rally.ui.notify.Notifier.hide();
+                this.loadGridBoard();
+            },
+
+            _pickerTypeChanged: function (picker) {
+                var newType = picker.getSelectedType();
+                return newType && this.currentType && newType.get('_ref') !== this.currentType.get('_ref');
+            },
+
+            _publishContentUpdatedNoDashboardLayout: function () {
+                this.fireEvent('contentupdated', { dashboardLayout: false });
+            },
+
+            onDestroy: function () {
+                this.callParent(arguments);
+                if (this.piTypePicker) {
+                    this.piTypePicker.destroy();
+                    delete this.piTypePicker;
+                }
+            }
+        });
+
+        Ext.define('Rally.apps.common.RowSettingsField', {
+            alias: 'widget.rowsettingsfield',
+            extend: 'Ext.form.FieldContainer',
+            requires: [
+                'Rally.ui.CheckboxField',
+                'Rally.ui.combobox.ComboBox',
+                'Rally.ui.plugin.FieldValidationUi',
+                'Rally.data.ModelFactory',
+                'Rally.data.wsapi.ModelBuilder'
+            ],
+
+            mixins: {
+                field: 'Ext.form.field.Field'
+            },
+
+            layout: 'hbox',
+
+            cls: 'row-settings',
+
+            config: {
+                value: undefined,
+                isAllowedFieldFn: Ext.emptyFn,
+                explicitFields: [],
+                modelNames: ['userstory', 'defect'],
+                whiteListFields: []
+            },
+
+            initComponent: function () {
+                this.callParent(arguments);
+
+                this.mixins.field.initField.call(this);
+
+                this.add([
+                    {
+                        xtype: 'rallycheckboxfield',
+                        name: 'showRows',
+                        boxLabel: '',
+                        margin: '0',
+                        submitValue: false,
+                        value: this.getValue().showRows,
+                        listeners: {
+                            change: function (checkbox, checked) {
+                                this.down('rallycombobox').setDisabled(!checked);
+                            },
+                            scope: this
+                        }
+                    },
+                    {
+                        xtype: 'rallycombobox',
+                        plugins: ['rallyfieldvalidationui'],
+                        name: 'rowsField',
+                        margin: '0 6px',
+                        width: 130,
+                        emptyText: 'Choose Field...',
+                        displayField: 'name',
+                        valueField: 'value',
+                        disabled: this.getValue().showRows !== 'true',
+                        editable: false,
+                        submitValue: false,
+                        storeType: 'Ext.data.Store',
+                        storeConfig: {
+                            remoteFilter: false,
+                            fields: ['name', 'value'],
+                            data: []
+                        }
+                    }
+                ]);
+
+                this._loadModels();
+            },
+
+            _loadModels: function () {
+                Rally.data.ModelFactory.getModels({
+                    types: this.getModelNames(),
+                    context: this.context,
+                    success: this._onModelsRetrieved,
+                    scope: this
+                });
+            },
+
+            _onModelsRetrieved: function (models) {
+                var fields = _.uniq(Ext.Array.merge(this.explicitFields, this._getRowableFields(_.values(models))), 'name');
+                var combobox = this.down('rallycombobox');
+                combobox.getStore().loadData(_.sortBy(fields, 'name'));
+                combobox.setValue(this.getValue().rowsField);
+                this.fireEvent('ready', this);
+            },
+
+            _getRowableFields: function (models) {
+                var artifactModel = Rally.data.wsapi.ModelBuilder.buildCompositeArtifact(models, this.context),
+                    allFields = artifactModel.getFields(),
+                    rowableFields = _.filter(allFields, function (field) {
+                        var attr = field.attributeDefinition;
+                        return attr && !attr.Hidden && attr.Sortable &&
+                            ((artifactModel.getModelsForField(field).length === models.length &&
+                            this.isAllowedFieldFn(field)) || _.contains(this.whiteListFields, field.displayName));
+                    }, this);
+
+                return _.map(rowableFields, function (field) {
+                    return {
+                        name: field.displayName,
+                        value: field.name
+                    };
+                });
+            },
+
+            getSubmitData: function () {
+                var data = {},
+                    showField = this.down('rallycheckboxfield'),
+                    rowsField = this.down('rallycombobox'),
+                    showRows = showField.getValue() && !_.isEmpty(rowsField.getValue());
+                data[showField.name] = showRows;
+                if (showRows) {
+                    data[rowsField.name] = rowsField.getValue();
+                }
+                return data;
+            },
+
+            refreshWithNewModelType: function (type) {
+                this.setModelNames([type]);
+                this._loadModels();
+            }
+        });
+
+        Ext.define('Rally.apps.portfoliokanban.PortfolioKanbanCard', {
+            extend: 'Rally.ui.cardboard.Card',
+            alias: 'widget.rallyportfoliokanbancard',
+
+            inheritableStatics: {
+                getFetchFields: function () {
+                    return [
+                        'Owner',
+                        'FormattedID',
+                        'Name',
+                        'StateChangedDate',
+                        'Blocked',
+                        'Ready',
+                        'DisplayColor'
+                    ];
+                }
+            },
+
+            config: {
+                showIconsAndHighlightBorder: false,
+                customFieldConfig: {
+                    UserStories: {
+                        fetch: ['UserStories', 'LeafStoryPlanEstimateTotal', 'LeafStoryCount'],
+                        popoverConfig: {
+                            placement: ['bottom', 'right', 'left', 'top'],
+                            listViewConfig: {
+                                addNewConfig: {
+                                    showAddWithDetails: false
+                                },
+                                gridConfig: {
+                                    columnCfgs: [
+                                        {
+                                            dataIndex: 'FormattedID',
+                                            width: 90
+                                        },
+                                        {
+                                            dataIndex: 'Name',
+                                            flex: 1
+                                        },
+                                        {
+                                            dataIndex: 'Release',
+                                            width: 90
+                                        },
+                                        {
+                                            dataIndex: 'Iteration',
+                                            width: 90
+                                        },
+                                        {
+                                            dataIndex: 'ScheduleState', // 'dataIndex' is the actual field name
+                                            text: 'State', // 'text' is the display name
+                                            width: 90
+                                        },
+                                        {
+                                            dataIndex: 'PlanEstimate',
+                                            width: 90
+                                        },
+                                        {
+                                            dataIndex: 'Project',
+                                            width: 60
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+            constructor: function (config) {
+                config.fields = Ext.Array.union(config.fields || [], ['StateChangedDate']);
+                this.callParent(arguments);
+            }
+        });
+
+        Ext.define('Rally.apps.portfoliokanban.PortfolioKanbanApp', {
+            extend: 'Rally.apps.common.PortfolioItemsGridBoardApp',
+            requires: [
+                'Rally.apps.common.RowSettingsField',
+                'Rally.apps.portfoliokanban.PortfolioKanbanCard',
+                /*'Rally.apps.portfoliokanban.PortfolioKanbanPolicy',*/
+                'Rally.ui.gridboard.plugin.BoardPolicyDisplayable',
+                'Rally.ui.cardboard.plugin.ColumnPolicy',
+                'Rally.ui.cardboard.Column',
+                'Rally.ui.cardboard.Card',
+                'Rally.util.Test',
+                'Deft.Deferred'
+            ],
+
+            appName: 'Portfolio Kanban',
+            autoScroll: false,
+            cls: 'portfolio-kanban',
+            statePrefix: 'portfolio-kanban',
+            toggleState: 'board',
+            settingsScope: 'project',
+
+            config: {
+                defaultSettings: {
+                    fields: 'Discussion,PercentDoneByStoryCount,UserStories,Milestones'
+                }
+            },
+
+            mixins: [
+                "Rally.clientmetrics.ClientMetricsRecordable",
+                'Rally.ui.plugin.print.Print',
+                'Rally.app.Printable'
+            ],
+
+            clientMetrics: [
+                {
+                    method: '_showHelp',
+                    description: 'portfolio-kanban-show-help'
+                }
+            ],
+
+            constructor: function (config) {
+                config.settingsScope = 'project';
+                config.piTypePickerConfig = { renderInGridHeader: !config.isFullPageApp };
+                this.callParent([config]);
+            },
+
+            getSettingsFields: function () {
+                return [{
+                    name: 'groupHorizontallyByField',
+                    xtype: 'rowsettingsfield',
+                    fieldLabel: 'Swimlanes',
+                    margin: '10 0 10 0',
+                    mapsToMultiplePreferenceKeys: ['showRows', 'rowsField'],
+                    readyEvent: 'ready',
+                    whiteListFields: ['Parent'],
+                    /*modelNames: this.piTypePicker.getAllTypeNames(),*/
+                    isAllowedFieldFn: function (field) {
+                        var attr = field.attributeDefinition;
+                        return !field.isMultiValueCustom() &&
+                            (attr.Custom && (attr.Constrained || attr.AttributeType.toLowerCase() !== 'string') ||
+                            attr.Constrained || _.contains(['boolean'], attr.AttributeType.toLowerCase())) &&
+                            !_.contains(['web_link', 'text', 'date'], attr.AttributeType.toLowerCase()) &&
+                            !_.contains(['Archived', 'Portfolio Item Type', 'State'], attr.Name);
+                    }
+                },
+                {
+                    type: 'query',
+                    config: {
+                        plugins: [
+                            {
+                                ptype: 'rallyhelpfield',
+                                helpId: 271
+                            },
+                            'rallyfieldvalidationui'
+                        ]
+                    }
+                }];
+            },
+
+            _createFilterItem: function (typeName, config) {
+                return Ext.apply({
+                    xtype: typeName,
+                    margin: '-15 0 5 0',
+                    showPills: true,
+                    showClear: true
+                }, config);
+            },
+
+            addGridBoard: function () {
+                this.callParent(arguments);
+            },
+
+            getGridBoardPlugins: function () {
+                return this.callParent(arguments);
+                /*return this.callParent(arguments).concat([{
+                    ptype: 'rallyboardpolicydisplayable',
+                    pluginId: 'boardPolicyDisplayable',
+                    prefKey: 'piKanbanPolicyChecked',
+                    checkboxConfig: {
+                        boxLabel: 'Show Policies',
+                        margin: '2 5 5 5'
+                    }
+                }]);
+                */
+            },
+
+            getFilterControlConfig: function () {
+                var config = this.callParent(arguments);
+                return _.merge(config, {
+                    blackListFields: _.union(config.blackListFields, ['State'])
+                });
+            },
+
+            getCardConfig: function () {
+                return {
+                    xtype: 'rallyportfoliokanbancard'
+                };
+            },
+
+            getCardBoardConfig: function () {
+                var config = _.merge(this.callParent(arguments), {
+                    loadDescription: 'Portfolio Kanban'
+                });
+
+                if (this.getSetting('showRows') && this.getSetting('rowsField')) {
+                    Ext.apply(config, {
+                        rowConfig: {
+                            field: this.getSetting('rowsField'),
+                            sortDirection: 'ASC'
+                        }
+                    });
+                }
+
+                return config;
+            },
+
+            publishComponentReady: function () {
+                this.fireEvent('contentupdated');
+                this.callParent(arguments);
+                Rally.environment.getMessageBus().publish(Rally.Message.piKanbanBoardReady);
+            },
+        });
+
+        Rally.onReady(function () {
+            Rally.launchApp('Rally.apps.portfoliokanban.PortfolioKanbanApp', {
+                name: 'Portfolio Kanban'
+            });
+        });
+
+    })();
+
+</script>
