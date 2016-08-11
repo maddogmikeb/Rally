@@ -1,0 +1,393 @@
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+
+<script type="text/javascript">
+
+var app;
+
+(function() {
+    var Ext = window.Ext4 || window.Ext;    
+	
+    Ext.define('Rally.ui.renderer.template.UserTemplate', {
+        extend: 'Ext.XTemplate',
+
+        requires: [
+            'Rally.util.Ref',
+            'Rally.util.Test',
+            'Rally.util.User'
+        ],
+
+        inheritableStatics: {
+            OWNER_IMAGE_EL_CLS: 'card-owner-img'
+        },
+
+        config: {
+            editable: false,
+			sortable: true
+        },
+
+        constructor: function(config) {
+            this.initConfig(config);
+
+            this.callParent([				
+					'<div class="card-owner-field" style="display: inline-block;">',
+						'<div class="field-content Owner">',
+							'<div style="display: inline; padding-right: 5px;" class="rui-field-value" title="{[this.getOwnerTitle(values)]}">',
+								'<img style="height: 20px !important;" class="{[this.getOwnerCls(values)]}" src="{[this.getProfileImageSrc(values)]}">',
+							'</div>',
+						'</div>',
+					'</div>',
+					'<div style="display: inline-block; padding-left: 10px; vertical-align: top;">',
+						'{[this.getOwnerTitle(values)]}',
+					'</div>',				
+						
+                {
+                    getOwnerCls: function(recordData) {
+                        var cls = [
+                            Rally.util.Test.toBrowserTestCssClass(Rally.util.Ref.getOidFromRef(recordData.User) || 'none'),
+                            Rally.ui.renderer.template.CardOwnerImageTemplate.OWNER_IMAGE_EL_CLS
+                        ];
+                        return cls.join(' ');
+                    },
+                    getOwnerTitle: function(recordData) {
+                        return recordData.User ? Ext.String.htmlEncode(recordData.User._refObjectName) : 'No User';                        
+                    },
+                    getProfileImageSrc: function(recordData) {
+                        return recordData.User ? Rally.util.User.getProfileImageUrl(25, recordData.User) : Rally.util.User.getNoOwnerImageUrl();
+                    }
+                }
+            ]);
+        }
+    });	
+	
+	Ext.define('Rally.ui.renderer.template.TaskTemplate', {
+        extend: 'Ext.XTemplate',
+
+        requires: [
+            'Rally.util.Ref',
+            'Rally.util.Test',
+            'Rally.util.User'
+        ],
+
+        config: {
+            editable: false,
+			sortable: true
+        },
+
+        constructor: function(config) {
+            this.initConfig(config);
+
+            this.callParent([			
+				'<div unselectable="on" class="x-grid-cell-inner " style="position: relative; top: -5px;">',
+					'<a href="#" onclick="javascript: if (app) app._clickHandler(this, \'{[this.getValue(values)]}\', \'{[this.getName(values)]}\');">Show Tasks</a>',
+				'</div>',
+                {
+                    getValue: function(recordData) {
+                        return recordData.User._ref;                        
+                    },
+                    getName: function(recordData) {
+                        return recordData.User._refObjectName;                        
+                    },
+                }
+            ]);
+        }
+    });	
+
+    Ext.define('CustomApp', {
+        extend: 'Rally.app.TimeboxScopedApp',
+        componentCls: 'app',
+        scopeType: 'iteration',
+
+		_clickHandler: function (e, userRef, userName) {            
+            var app = Rally.getApp();
+           
+			Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
+				models: ['userstory'],
+				autoLoad: true,
+				enableHierarchy: true,
+				filterOnLoad: true,
+				fetch: true,
+				filters: [
+					{
+						property: 'Iteration.ObjectID',
+						operator: '=',
+						value: app.getContext().getTimeboxScope().getRecord().get("ObjectID")
+					},
+					{
+						property: 'Tasks.Owner',
+						operator: '=',
+						value: userRef
+					},
+				],
+			}).then({
+				success: function(store) {
+					var dialog = Ext.create('Rally.ui.dialog.Dialog', {
+						autoShow: true,
+						draggable: true,
+						closable: true,
+						resizable: false,
+						autoCenter: true,
+						width: "660px",
+						style: {
+							'min-width': "460px",
+						},
+						title: 'Stories associated with tasks for ' + userName, 
+						listeners: {
+							close: function() {
+								if (app) app.refresh();							
+								this.callParent(arguments);
+							},
+						},
+					});
+							
+					dialog.add({
+						xtype: 'rallytreegrid',
+						store: store,
+						context: this.getContext(),
+						fit: true, 
+						height: 400,
+						style: { 
+							'width': '100%', 
+							'height': '400px'
+						},
+						enableEditing: true,
+						enableBulkEdit: false,
+						shouldShowRowActionsColumn: false,
+						enableRanking: false,
+						columnCfgs: [
+							'Name',
+							'ScheduleState',
+							'Owner', 
+							'TaskRemainingTotal'
+						]
+					});                
+				},
+				scope: this
+			});
+		},
+			
+        onScopeChange: function () {
+            app = this;
+            this._hideMask();
+            if (this.getContext().getTimeboxScope().getRecord() === null) {
+                Ext.Msg.alert("Iteration required", "You must specify a valid Iteration. Unscheduled is not supported.", function (btn) {
+                    app._showMask('Invalid iteration selection.');
+                    if (app._myGrid) { app._myGrid.destroy(); }
+                });
+            } else {
+                this._showMask('Updating');
+                this._loadGrid();
+            }
+        },
+
+        _populateGrid : function(store) {		
+            app._myGrid = Ext.create("Rally.ui.grid.Grid", {
+                xtype: 'rallygrid',
+                layout: 'fit',
+                enableColumnHide: false,
+                showRowActionsColumn: false,
+                enableEditing: true,
+				forceFit: true,
+                store: store,
+                columnCfgs: [
+                    {
+                        text: 'User',
+                        xtype: 'templatecolumn',
+                        flex: 1,						
+						tpl: Ext.create('Rally.ui.renderer.template.UserTemplate')
+                    },
+                    {
+                        text: 'Capacity',
+                        dataIndex: 'Capacity',
+                        flex: 1,
+						editor: {
+							xtype: 'rallytextfield',
+							maskRe: /[0-9]/,
+							validator: function (value) {
+								return (value === '' || (value > 0 && value <= 9999)) || 'Capacity must be > 0 and < 9999.';
+							},
+							rawToValue: function (value) {
+								return value === '' ? value : parseInt(value, 10);
+							}
+						}, 
+						emptyCellText : '0'
+                    },
+                    {
+                        text: 'Original Task Estimates',
+						sortable: true, 
+                        flex: 1, 
+						dataIndex: 'TaskEstimates',
+						emptyCellText : '0'
+                    },
+                    {
+                        text: 'To Do',
+                        dataIndex: 'ToDo',
+                        flex: 1, 
+						emptyCellText : '0'
+                    },
+                    {
+                        text: 'Tasks',
+                        xtype: 'templatecolumn',
+                        flex: 1,						
+						tpl: Ext.create('Rally.ui.renderer.template.TaskTemplate')
+                    },
+                    {
+                        text: 'Load',
+                        xtype: 'templatecolumn',
+                        flex: 1,						
+                        tpl: Ext.create('Rally.ui.renderer.template.progressbar.ProgressBarTemplate', {
+							sortable: true,
+                            percentDoneName: 'UserLoad',
+                            calculateColorFn: function (recordData) {
+                                if (recordData.UserLoad < 0.9) {
+                                    colVal = "#B2E3B6"; // Green
+                                } else if (recordData.UserLoad < 1.0) {
+                                    colVal = "#FBDE98"; // Orange
+                                } else {
+                                    colVal = "#FCB5B1"; // Red
+                                }
+                                return colVal;
+                            }
+                        })
+                    }
+                ],
+                pagingToolbarCfg: {
+                    pageSizes: [200]
+                }
+            });
+
+            app._hideMask();
+
+            app.add(app._myGrid);
+        },
+
+        _loadUserCapacity : function (store, records, tasks) {
+            this._showMask('Calculating to do and percentages...');
+			
+            Ext.each(records, function (rec) {
+                if (!rec.data) {
+                    return;
+                }				
+				var owner = rec.get('User'); 
+				var todo = 0;				
+				Ext.Array.each(app.taskData, function(task){				
+					if (owner && task.get('Owner') && task.get('Owner')._refObjectName === owner._refObjectName) { 
+						todo += task.get('ToDo');
+					}
+				});
+				
+				rec.data.ToDo = todo;				
+				rec.data.UserLoad = rec.data.ToDo / rec.data.Capacity;
+			}, this);
+
+            app._populateGrid(Ext.create('Rally.data.custom.Store', 
+				{ 
+					'model': 'user', 
+					data: records, 
+					listeners: {
+						update: function( store, rec, operation, modifiedFieldNames, eOpts ) {							
+							if (operation === "edit" && modifiedFieldNames[0] === "Capacity") {
+								rec.set("UserLoad", rec.data.ToDo / rec.data.Capacity);
+							}
+						}
+					}
+				}
+			));
+        },
+
+        _loadTasks: function (store, records) {
+
+            app.taskData = records;
+
+            Ext.create("Rally.data.wsapi.Store", {
+                model: 'useriterationcapacity',
+                filters: app._getFilters(),
+                context: app._getContext(),
+				autoLoad: true,
+                fetch: ['User', 'TaskEstimates', 'Iteration', 'Capacity', 'Load'],
+                listeners: {
+                    load: function (store, records, success) {                        
+                        if (!success) {
+                            app._showMask('Error loading user capacity.');
+                            return;
+                        }
+                        this._showMask('Updating user capacity...');
+
+                        app._loadUserCapacity(store, records, app.taskData);
+                    },
+                    scope: app
+                },
+                sorters: [
+                    { property: 'User', direction: 'ASC' }
+                ]
+            });
+        },
+		
+		refresh: function() {
+			var app = Rally.getApp();
+			app._showMask('Refreshing...');
+			app._loadGrid();
+		},
+
+        _loadGrid: function () {
+            app = this;
+
+            if (this._myGrid) { this._myGrid.destroy(); }
+
+            Ext.create("Rally.data.wsapi.Store", {
+                model: 'task',
+                filters: app._getFilters(),
+                context: app._getContext(),
+                autoLoad: true,
+				fetch: true, 
+                listeners: {
+                    load: function (store, records, success) {
+                        if (!success) {
+                            app._showMask('Error loading tasks.');
+                            return;
+                        }
+                        this._showMask('Updating tasks...');
+                        app._loadTasks(store, records);
+                    },
+                    scope: app
+                }
+            });
+        },
+
+        _getFilters: function () {
+            var filters = [];
+            filters.push({
+                property: 'Iteration.ObjectID',
+                operator: '=',
+                value: app.getContext().getTimeboxScope().getRecord().get("ObjectID")
+            });
+            return filters;
+        },
+
+        _getContext: function () {
+            return {
+                workspace: this.getContext().getWorkspaceRef(),
+                project: this.getContext().getProjectRef(),
+                projectScopeUp: this.getContext().getProjectScopeUp(),
+                projectScopeDown: this.getContext().getProjectScopeDown()
+            };
+        },
+
+        _showMask: function (msg) {
+            if (this.getEl()) {
+                this.getEl().unmask();
+                this.getEl().mask(msg);
+            }
+        },
+
+        _hideMask: function () {
+            this.getEl().unmask();
+        }
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('CustomApp', {
+            name: "TeamCapacityGrid"
+        });
+    });
+})();
+</script>
