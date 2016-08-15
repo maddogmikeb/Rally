@@ -18,6 +18,10 @@
                 {
                     name: 'Query',
                     type: 'query'
+                },
+                {
+                    name: 'Info Text',
+                    xtype: 'rallytextfield'
                 }
             ];
         },
@@ -39,23 +43,29 @@
         _buttonClick: function (e) {
             var app = Rally.getApp();
 
-            Ext.create('Rally.ui.dialog.Dialog', {
-                autoShow: true,
-                draggable: true,
-                closable: true,
-                width: 300,
-                title: 'Information',
-                items: {
-                    xtype: 'component',
-                    html: '<div></div>',
-                    padding: 10
-                },
-                listeners: {
-                    close: function (e, o) {
-                        app.refresh();
+            var infoText = app.getSetting("Info Text");
+
+            if (infoText && infoText != "") {
+                Ext.create('Rally.ui.dialog.Dialog', {
+                    autoShow: true,
+                    draggable: true,
+                    closable: true,
+                    width: 300,
+                    title: 'Information',
+                    items: {
+                        xtype: 'component',
+                        html: '<div>' + infoText + '</div>',
+                        padding: 10
+                    },
+                    listeners: {
+                        close: function (e, o) {
+                            app.refresh();
+                        }
                     }
-                }
-            });
+                });
+            } else {
+                app.refresh();
+            }
         },
 
         refresh: function () {
