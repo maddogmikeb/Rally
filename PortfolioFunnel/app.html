@@ -2,7 +2,7 @@
 <meta name="Version" content="2016.07.12" />
 <meta name="Vendor" content="maddogmikeb" />
 
-<script type="text/javascript" src="/apps/2.0/sdk.js?debug=true"></script>
+<script type="text/javascript" src="/apps/2.0/sdk.js?debug=false"></script>
 <script type="text/javascript" src="/apps/2.0/lib/analytics/analytics-all.js"></script>
 <script type="text/javascript" src="https://code.highcharts.com/modules/funnel.js"></script>
 <script type="text/javascript">
@@ -13,9 +13,27 @@
 
         chart: null,
 
-        config: {
-            defaultSettings: {
+        getSettingsFields: function () {
+            return [
+                {
+                    name: 'Query',
+                    type: 'query'
+                }
+            ];
+        },
+
+        _buildQueryFilter: function (model) {
+            var queries = [];            
+            if (this.getSetting('Query')) {
+                try {
+                    queries.push(Rally.data.QueryFilter.fromQueryString(this.getSetting('Query')));
+                } catch (e) {
+                    Rally.ui.notify.Notifier.showError({
+                        message: e.message
+                    });
+                }
             }
+            return queries;
         },
 
         _buttonClick: function (e) {
@@ -94,7 +112,8 @@
                 },
                 fetch: ['Name', 'State'],
                 context: this.getContext().getDataContext(),
-                limit: Infinity
+                limit: Infinity,
+                filters: app._buildQueryFilter()
             });
 
             app._updateButtonText(true);
