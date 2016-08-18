@@ -1,0 +1,118 @@
+<script type="text/javascript" src="/apps/2.1/sdk.js"></script>
+<script>
+(function () {
+    var Ext = window.Ext4 || window.Ext;
+	
+	function RaiseError(e) {
+		try { 
+			Rally.ui.notify.Notifier.showError({
+				message: e.message
+			});
+		} catch (e2) {
+			Ext.Error.raise(e2);
+		}
+	}
+
+	try {	
+	
+		Ext.define('Rally.ui.renderer.template.MyHeaderTemplate', {
+			extend: 'Ext.XTemplate',
+						
+			constructor: function(config) {	
+				var templateConfig = config && config.template || [
+					'<table class="rally-grid x-grid-table" style="width: 100%; padding-left: -14px;">' + 
+						'<tr class="x-grid-row">' + 
+							'<td class="x-grid-cell x-grid-td wrap-text x-unselectable rally-grid-cell-name name" style="vertical-align: middle;">' + 
+								'<div class=".x-grid-cell-inner" style="width: 110px; display:inline-block;">{name}</div>' +
+							'</td>' + 
+							'<td class="x-grid-cell x-grid-td wrap-text x-unselectable rally-grid-cell-name name">' + 
+								'<div class="x-grid-cell-inner" style="display:inline-block;">OVERALL % DONE BY STORY PLANNED ESTIMATE: {PercentDoneByStoryPlanEstimate}</div>' +
+							'</td>' + 
+							'<td class="x-grid-cell x-grid-td wrap-text x-unselectable rally-grid-cell-name name">' + 
+								'<div class="x-grid-cell-inner" style="display:inline-block;">OVERALL % DONE BY STORY COUNT: {PercentDoneByStoryCount}</div>' +
+							'</td>' + 
+						'</tr>' + 
+					'</table>'
+				];
+				templateConfig.push(this.config);
+				templateConfig.push(config);
+				return this.callParent(templateConfig);			
+			},
+			
+			apply:  function(values) {				
+				values.PercentDoneByStoryPlanEstimate = Ext.create('Rally.ui.renderer.template.progressbar.PercentDoneByStoryPlanEstimateTemplate', { 
+						width: '102px',
+						isClickable: false,						
+						shouldShowPercentDone: function(recordData) { return true; },					
+						calculatePercent: function (recordData) {
+							var total = 0;
+							Ext.each(recordData.children, function(child) {
+								total += child.get("PercentDoneByStoryPlanEstimate");
+							});
+							return Math.round((total / recordData.children.length) * 100);
+						},
+					}).compile(values).apply(values);
+					
+				values.PercentDoneByStoryCount = Ext.create('Rally.ui.renderer.template.progressbar.PercentDoneByStoryCountTemplate', { 
+						width: '102px',
+						isClickable: false,						
+						shouldShowPercentDone: function(recordData) { return true; },					
+						calculatePercent: function (recordData) {
+							var total = 0;
+							Ext.each(recordData.children, function(child) {
+								total += child.get("PercentDoneByStoryCount");
+							});
+							return Math.round((total / recordData.children.length) * 100);
+						},
+					}).compile(values).apply(values);					
+				return this.callParent([values]);
+			},
+		});	
+	
+	
+		Ext.define('Rally.example.GroupedGrid', {
+			extend: 'Rally.app.App',
+			componentCls: 'app',
+		
+			launch: function() {
+			
+				this.add({
+					xtype: 'rallygrid',
+					columnCfgs: [
+						'FormattedID',
+						'Name',
+						'PercentDoneByStoryPlanEstimate', 
+						'PercentDoneByStoryCount'
+					],
+					context: this.getContext(),
+					features: [{
+						ftype: 'groupingsummary',
+						groupHeaderTpl:  Ext.create('Rally.ui.renderer.template.MyHeaderTemplate')
+					}],
+					storeConfig: {
+						model: 'portfolioitem/portfolio',
+						groupField: 'c_FinanceCode',
+						groupDir: 'ASC',
+						fetch: ['c_FinanceCode', 'PercentDoneByStoryPlanEstimate', 'PercentDoneByStoryCount'],
+						getGroupString: function(record) {
+							var code = record.get('c_FinanceCode');
+							return (code || 'NO CODE SPECIFIED').toUpperCase();
+						}
+					}
+				});
+			}
+		});
+
+		Rally.onReady(function () {
+			Rally.launchApp('Rally.example.GroupedGrid', {
+			  name: 'Grouped Grid Example'
+			});					
+        });
+		
+	} catch (e) {
+	   RaiseError(e);
+	}	
+	
+})();
+	
+</script>
