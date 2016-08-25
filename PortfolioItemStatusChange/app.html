@@ -1,0 +1,52 @@
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+
+<script type="text/javascript">
+	Rally.onReady(function() {
+		Ext.define('Rally.example.SimpleGrid', {
+            requires: [
+                'Rally.util.Colors'
+            ],
+			extend: 'Rally.app.App',
+			componentCls: 'app',
+		
+			launch: function() {
+			
+                // reset the colours to the only ones that we want to allow 
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE = [];
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
+                    value: Rally.util.Colors.lime.toUpperCase(),
+                    name: 'Green'
+                });
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
+                    value: Rally.util.Colors.yellow.toUpperCase(),
+                    name: 'Orange'
+                });
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
+                    value: Rally.util.Colors.red_med.toUpperCase(),
+                    name: 'Red'
+                });
+			
+				this.add({
+					xtype: 'rallygrid',
+					columnCfgs: [
+						'FormattedID',						
+						'DisplayColor',
+						'Name',
+						'State'
+					],
+					context: this.getContext(),
+					enableEditing: true,
+					showRowActionsColumn: true,
+					storeConfig: {
+						model: 'portfolioitem/portfolio'
+					}
+				});
+			}
+		});
+		
+
+		Rally.launchApp('Rally.example.SimpleGrid', {
+		  name: 'Grid Example'
+		});
+	});
+</script>
