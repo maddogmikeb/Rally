@@ -1,0 +1,571 @@
+<meta name="Name" content="App: RealCycleTime" />
+<meta name="Version" content="2016.07.12" />
+<meta name="Vendor" content="maddogmikeb" />
+
+<style>
+    .table {
+        border-spacing: 3px;
+        border-collapse: separate;
+        width: 100%;
+        padding: 5px;
+        font-size: 11px;
+    }
+
+        .table thead {
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .table tbody > tr > td:first-of-type {
+            padding-right: 10px;
+        }
+
+        .table tbody > tr > td:last-of-type {
+            text-align: right;
+        }
+
+        .table tfoot {
+            text-align: right;
+            font-weight: bold;
+        }
+</style>
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+<script>
+
+    function LineFitter() {
+        this.count = 0;
+        this.sumX = 0;
+        this.sumX2 = 0;
+        this.sumXY = 0;
+        this.sumY = 0;
+    }
+
+    LineFitter.prototype = {
+        'add': function (x, y) {
+            this.count++;
+            this.sumX += x;
+            this.sumX2 += x * x;
+            this.sumXY += x * y;
+            this.sumY += y;
+        },
+        'project': function (x) {
+            var det = this.count * this.sumX2 - this.sumX * this.sumX;
+            var offset = (this.sumX2 * this.sumY - this.sumX * this.sumXY) / det;
+            var scale = (this.count * this.sumXY - this.sumX * this.sumY) / det;
+            return offset + x * scale;
+        }
+    };
+
+</script>
+<script>
+
+    Ext.define('RealCycleTime', {
+        extend: 'Rally.app.App',
+        componentCls: 'app',
+        settingsScope: 'app',
+
+        requires: [
+            'Rally.ui.grid.Grid',
+            'Rally.data.ModelFactory',
+            'Rally.domain.WsapiModelBuilder'
+        ],
+
+        config: {
+            defaultSettings: {
+                'Number of Months': 12,
+                'Starting Scheduled State': 'Idea',
+                'End Scheduled State': 'Done',
+                'Show Trend Line': true,
+                'Show Average Line': true
+            }
+        },
+
+        startDate: null,
+        endDate: null,
+        chart: {},
+        rawData: {},
+
+        getSettingsFields: function () {
+            return [
+                {
+                    name: 'Number of Months',
+                    xtype: 'rallytextfield'
+                },
+                {
+                    name: 'Show Trend Line',
+                    xtype: 'rallycheckboxfield'
+                },
+                {
+                    name: 'Show Average Line',
+                    xtype: 'rallycheckboxfield'
+                }
+            ];
+        },
+
+        _getStartOfMonth: function (d) {
+            return new Date(d.getFullYear(), d.getMonth(), 1);
+        },
+
+        _dateToYMD: function (date) {
+            var d = date.getDate();
+            var m = date.getMonth() + 1;
+            var y = date.getFullYear();
+            return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m) + "/" + y;
+        },
+
+        _loadData: function (store, records, success) {
+            console.log("Loading data for Portfolio RealCycleTime app (" + success + ")");
+
+            if (!success) return;
+
+            var cycleTimes = {};
+            var bins = {};			
+
+            var currentNumMonths = parseInt(this.getSetting('Number of Months'));
+
+            var date = new Date(this.startDate);
+            for (var idx = 0; idx < currentNumMonths; idx++) {
+                bins[date] = [];
+                date = Rally.util.DateTime.add(date, "month", 1);
+            }
+
+            Ext.each(records, function (rec) {
+                if (!(rec.get('State') === 'Done')) {
+                    return;
+                }
+
+                var oid = rec.get('ObjectID');
+				
+                if (cycleTimes.hasOwnProperty(oid)) {
+                    return; // already processed
+                }
+
+                cycleTimes[oid] = 0;
+
+                var recordFilter = Ext.Array.filter(records, function (record) {
+                    return oid === record.get('ObjectID');
+                });
+
+                var accepteds = Ext.Array.filter(recordFilter, function (record) {
+                    return record.get('State') === 'Done';
+                });
+
+                var inprogresss = Ext.Array.filter(recordFilter, function (record) {
+                    return record.get('State') === 'Idea';
+                });
+				
+                var deleted = Ext.Array.filter(recordFilter, function (record) {
+                    return record.get('_ValidFrom') === record.get('_ValidTo');
+                });
+				
+				if (deleted.length > 0) {
+					Ext.each(recordFilter, function(rec) {
+						rec.data.Archived = true; 
+					});
+				}
+
+                if (accepteds.length > 0) {
+
+                    var lastAccepted = Ext.Array.max(accepteds, function (a, b) {
+                        return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
+                    });
+
+                    var acceptedValidFrom = new Date(lastAccepted.get('StateChangedDate'));
+
+					if (inprogresss.length > 0) {
+						var progressValidFrom = new Date(Ext.Array.min(inprogresss, function (a, b) {
+							return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
+						}).get('_ValidFrom'));
+
+						var progressMax = new Date(Ext.Array.max(inprogresss, function (a, b) {
+							return a.get('_ValidFrom') > b.get('_ValidFrom') ? 1 : -1;
+						}).get('_ValidFrom'));
+
+						if (progressMax > acceptedValidFrom) { // if it has moved out of done but not yet been re-done then dont count it
+							return;
+						}
+					} else {
+						progressValidFrom = new Date(rec.get("CreationDate"));
+					}
+
+					var cycleTime = Math.abs(Rally.util.DateTime.getDifference(progressValidFrom, acceptedValidFrom, 'week'));
+					
+                    var date = this._getStartOfMonth(acceptedValidFrom);
+
+                    if (bins.hasOwnProperty(date)) {
+                        bins[date].push(cycleTime);
+                        var key = this._dateToYMD(new Date(date));
+                        if (this.rawData[key] == null) {
+                            this.rawData[key] = [];
+                        }						
+						this.rawData[key].push([lastAccepted, progressValidFrom, acceptedValidFrom, cycleTime]);
+                    }
+                }
+
+            }, this);
+
+            this._updateChart(bins);
+        },
+
+        _updateChart: function (bins) {
+            var that = this;
+            var totalSum = 0;
+            var fitter = new LineFitter();
+
+            var data = [];
+            var i = 0;
+            for (var binKey in bins) {
+                var binAverage = Ext.Array.mean(bins[binKey]);
+                if (isNaN(binAverage)) {
+                    binAverage = null;
+                } else {
+                    binAverage = binAverage; 
+                    fitter.add(i++, binAverage);
+                }
+                data.push(binAverage);
+                totalSum += binAverage;
+            }
+
+            var currentNumMonths = parseInt(this.getSetting('Number of Months'));
+
+            var average = totalSum / currentNumMonths;
+
+            var averages = [];
+            var trend = [];
+            for (var i = 0; i < currentNumMonths; i++) {
+                averages.push(average);
+                trend.push(fitter.project(i));
+            }
+
+            var hc = this.chart.down('highchart').chart;
+            if (hc) {
+                var cycleTimeDataContainer = hc.series.find(function (a) { return a.name === "Cycle time"; });
+                cycleTimeDataContainer.setData(data);
+
+                var trendDataContainer = hc.series.find(function (a) { return a.name === "Trend"; });
+                trendDataContainer.setData(trend);
+
+                var averageDataContainer = hc.series.find(function (a) { return a.name === "Average"; });
+                averageDataContainer.setData(averages);
+
+                hc.redraw();
+            }
+
+            Rally.getApp()._updateButtonText(false);
+        },
+
+        _getChartData: function () {
+
+            Rally.getApp()._updateButtonText(true);
+
+            Ext.create('Rally.data.lookback.SnapshotStore', {
+                listeners: {
+                    load: this._loadData,
+                    scope: this
+                },
+                context: this._getContext(),
+                removeUnauthorizedSnapshots: true,
+                autoLoad: true,
+                compress: true,
+                limit: 'Infinity',
+                fetch: ['_ValidFrom', '_ValidTo', 'CreationDate', 'StateChangedDate', 'State', '_PreviousValues.State', 'FormattedID', 'Archived'],
+                hydrate: ['State', '_PreviousValues.State'],
+                filters: this._getFilters() /*,
+                sorters: [{
+                    property: '_ValidTo',
+                    direction: 'ASC'
+                }]*/
+            });
+
+            var currentNumMonths = parseInt(this.getSetting('Number of Months'));
+
+            var categories = [];
+            var date = new Date(this.startDate);
+            for (var idx = 0; idx < currentNumMonths; idx++) {
+                categories.push(this._dateToYMD(date));
+                date = Rally.util.DateTime.add(date, "month", 1);
+            }
+
+            return {
+                categories: categories,
+                series: [
+                    {
+                        type: 'line',
+                        name: 'Average',
+                        dashStyle: 'ShortDot',
+                        id: 'averages'
+                    },
+                    {
+                        type: 'line',
+                        name: 'Trend',
+                        dashStyle: 'Dash',
+                        marker: {
+                            enabled: false
+                        },
+                        id: 'trend'
+                    },
+                    {
+                        type: 'spline',
+                        name: 'Cycle time',
+                        id: 'primary',
+                        connectNulls: true
+                    }
+                ]
+            };
+        },
+
+        _getChartConfig: function () {
+            return {
+                chart: {
+                    type: 'line'
+                },
+                title: {
+                    text: 'Cycle Time For past 12 Months'
+                },
+                subtitle: {
+                    text: '<div style="font-size: 12px;">A trend down is generally better.</div>',
+                    useHTML: true
+                },
+                xAxis: {
+                },
+                yAxis: {
+                    min: 0,
+                    title: {
+                        text: 'Average Done Portfolio Items Cycle Time (Weeks)'
+                    }
+                },
+                tooltip: {
+                    valueDecimals: 1,
+                    headerFormat: '<span style="width: 200px; font-size:10px">{point.key}</span><table style="width: 200px; font-size:10px">',
+                    pointFormat: '<tr><td style="color:{series.color};padding:0">{series.name}: </td>' +
+                    '<td style="padding:0"><b>{point.y}</b></td></tr>',
+                    footerFormat: '</table>',
+                    shared: true,
+                    useHTML: true
+                },
+                plotOptions: {
+                    series: {
+                        cursor: 'pointer',
+                        point: {
+                            events: {
+                                click: this._chartClickHandler
+                            }
+                        },
+                        marker: {
+                            lineWidth: 1
+                        }
+                    }
+                }
+            };
+        },
+
+        _chartClickHandler: function (e) {
+            if (!(this.series.name === "Cycle time")) {
+                return;
+            }
+
+            var options = {
+                weekday: "short", year: "numeric", month: "short",
+                day: "numeric", hour: "2-digit", minute: "2-digit"
+            };
+
+			debugger;
+            var records = Rally.getApp().rawData[e.currentTarget.category];
+            var average = 0;
+            var data = [];
+            Ext.each(records, function (rec) {
+                data.push({
+                    'Item': rec,
+                    'Idea': new Date(rec[1]).toLocaleTimeString("en-au", options),
+                    'Done': new Date(rec[2]).toLocaleTimeString("en-au", options),
+                    'Cycle Time (weeks)': rec[3].toFixed(0)
+                });
+                average += rec[3];
+            });			
+
+            var container = Ext.create('Rally.ui.grid.Grid', {
+                title: 'Average: ' + (average / records.length).toFixed(1),
+                width: '100%',
+                frame: true,
+                store: Ext.create('Rally.data.custom.Store', {
+                    data: data,
+                    pageSize: 5
+                }),
+                pagingToolbarCfg: {
+                    pageSizes: [5, 10, 25]
+                },
+                columnCfgs: [
+                    {
+                        text: 'Item',
+                        dataIndex: 'Item',
+                        renderer: function (rec) {							
+							var isArchived = rec[0].get('Archived');
+							if (isArchived) {								
+								return Ext.String.format('<span style="text-decoration: line-through;" title="Archived">{0}</span>', rec[0].get('FormattedID'));
+							} else {
+								var link = "/#/detail/portfolioitem/portfolio/" + rec[0].get('ObjectID');
+								return Ext.String.format('<a target="_blank" href="{0}">{1}</a>', link, rec[0].get('FormattedID'));
+							}
+                        }
+                    },
+                    {
+                        text: 'Idea/Created',
+                        dataIndex: 'Idea'
+                    },
+                    {
+                        text: 'Done',
+                        dataIndex: 'Done'
+                    },
+                    {
+                        text: 'Cycle Time (weeks)',
+                        dataIndex: 'Cycle Time (weeks)'
+                    }
+                ]
+            });
+
+            Ext.create('Rally.ui.dialog.Dialog', {
+                autoShow: true,
+                draggable: true,
+                closable: true,
+                resizable: true,
+                width: "460px",
+                style: {
+                    'min-width': "460px",
+                },
+                title: 'Stories in month ' + e.currentTarget.category,
+                items: [container],
+                listeners: {
+                    close: function (e, o) {
+                        var app = Rally.getApp();
+                        app.refresh();
+                    }
+                }
+            });
+        },
+
+        _getFilters: function () {
+		
+				/*,				
+                {
+                    property: 'State',
+                    operator: 'in',
+                    value: ['Idea', 'Done']
+                },
+                {
+                    property: '_PreviousValues.State',
+                    operator: '$ne',
+                    value: null
+                }
+				*/
+				
+                /*{
+                    property: '_ValidFrom',
+                    operator: '$lte',
+                    value: Rally.util.DateTime.toIsoString(this.endDate)
+                },*/
+		
+            return [
+                {
+                    property: '_ProjectHierarchy',
+                    value: parseInt(this.getContext().getProjectRef().match(/\d+/), 10)
+                },
+                {
+                    property: '_ValidFrom',
+                    operator: '$gte',
+                    value: Rally.util.DateTime.toIsoString(Rally.util.DateTime.add(this.startDate, "month", -12)) /// go back a bit further to ensure that we get an accurate count for the first week
+                },
+                {
+                    property: '_TypeHierarchy',
+                    operator: 'in',
+                    value: ['PortfolioItem/Portfolio']
+                }
+            ];
+        },
+
+        _getContext: function () {
+            return {
+                workspace: this.getContext().getWorkspaceRef(),
+                project: this.getContext().getProjectRef(),
+                projectScopeUp: this.getContext().getProjectScopeUp(),
+                projectScopeDown: this.getContext().getProjectScopeDown()
+            };
+        },
+
+        _buttonClick: function (e) {
+            var app = Rally.getApp();
+            var html = '<div>If an item is moved back out of "Done" then only the final time is counted, if not "Done" again then not counted.</div><br/><div>"Done" date is used to determine which week the cycle time ended.</div></br><div>Time from when item is first moved to "Idea" to when it is finally "Done".</div>';
+
+            Ext.create('Rally.ui.dialog.Dialog', {
+                autoShow: true,
+                draggable: true,
+                closable: true,
+                width: 300,
+                title: 'Information',
+                items: {
+                    xtype: 'component',
+                    html: html,
+                    padding: 10
+                },
+                listeners: {
+                    close: function (e, o) {
+                        app.refresh();
+                    }
+                }
+            });
+        },
+
+        _updateButtonText: function (isLoading) {
+            var button = Rally.getApp().down('button');
+            if (!button) {
+                return;
+            }
+            if (isLoading) {
+                button.handler = function () { };
+                button.setText("Loading...");
+            } else {
+                button.handler = Rally.getApp()._buttonClick;
+                button.setText("Information");
+            }
+        },
+
+        refresh: function () {
+            var app = Rally.getApp();
+			app.rawData = {}; // reset 
+            app._getChartData();
+        },
+
+        launch: function () {
+
+            this.startDate = Rally.util.DateTime.add(this._getStartOfMonth(new Date()), "month", (0 - parseInt(this.getSetting('Number of Months'))));
+            this.endDate = this._getStartOfMonth(new Date());
+
+            var button = Ext.create('Rally.ui.Button', {
+                text: 'Information',
+                handler: this._buttonClick,
+                style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    'z-index': 199
+                }
+            });
+
+            this.add(button);            
+
+            this.chart = Ext.create('Rally.ui.chart.Chart', {
+                loadMask: false,
+                chartData: this._getChartData(),
+                chartConfig: this._getChartConfig()
+            });
+
+            this.add(this.chart);
+        }
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('RealCycleTime', {
+            name: 'Real Cycle Time'
+        });
+    });
+
+</script>
