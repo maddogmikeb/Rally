@@ -237,21 +237,26 @@
             }
 
             var hc = this.chart.down('highchart').chart;
-            if (!hc) return;
+            if (hc) {
+                var cycleTimeDataContainer = hc.series.find(function (a) { return a.name === "Cycle time"; });
+                cycleTimeDataContainer.setData(data);
 
-            var cycleTimeDataContainer = hc.series.find(function (a) { return a.name === "Cycle time"; });
-            cycleTimeDataContainer.setData(data);
+                var trendDataContainer = hc.series.find(function (a) { return a.name === "Trend"; });
+                trendDataContainer.setData(trend);
 
-            var trendDataContainer = hc.series.find(function (a) { return a.name === "Trend"; });
-            trendDataContainer.setData(trend);
+                var averageDataContainer = hc.series.find(function (a) { return a.name === "Average"; });
+                averageDataContainer.setData(averages);
 
-            var averageDataContainer = hc.series.find(function (a) { return a.name === "Average"; });
-            averageDataContainer.setData(averages);
+                hc.redraw();
+            }
 
-            hc.redraw();
+            Rally.getApp()._updateButtonText(false);
         },
 
         _getChartData: function () {
+
+            Rally.getApp()._updateButtonText(true);
+
             Ext.create('Rally.data.lookback.SnapshotStore', {
                 listeners: {
                     load: this._loadData,
@@ -373,7 +378,7 @@
                     'Final Accepted': new Date(rec[2]).toLocaleTimeString("en-au", options),
                     'Cycle Time (days)': rec[3].toFixed(1)
                 });
-                average += rec[4];
+                average += rec[3];
             });
 
             var container = Ext.create('Rally.ui.grid.Grid', {
@@ -497,8 +502,23 @@
             });
         },
 
+        _updateButtonText: function (isLoading) {
+            var button = Rally.getApp().down('button');
+            if (!button) {
+                return;
+            }
+            if (isLoading) {
+                button.handler = function () { };
+                button.setText("Loading...");
+            } else {
+                button.handler = Rally.getApp()._buttonClick;
+                button.setText("Information");
+            }
+        },
+
         refresh: function () {
             var app = Rally.getApp();
+			app.rawData = {};
             app._getChartData();
         },
 
@@ -518,7 +538,7 @@
                 }
             });
 
-            this.add(button);
+            this.add(button);            
 
             this.chart = Ext.create('Rally.ui.chart.Chart', {
                 loadMask: false,
