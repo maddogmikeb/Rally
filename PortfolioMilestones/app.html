@@ -1,0 +1,436 @@
+<meta name="Name" content="App: Super Group Grid" />
+<meta name="Version" content="2016.08.22" />
+<meta name="Vendor" content="maddogmikeb" />
+
+<style>
+	body {
+		width: 99.99%
+	}
+</style>
+<script type="text/javascript" src="/apps/2.1/sdk.js"></script>
+<script>
+    (function() {
+        var Ext = window.Ext4 || window.Ext;
+
+        Ext.define('Rally.ui.plugin.template.OverallPercentDoneByStoryPlanEstimateTemplateMixin', {
+            build: function(config) {
+                if (config) {
+                    if (config.showOverallPercentDoneByStoryPlanEstimate) {
+                        return '<td class="x-grid-cell x-grid-td wrap-text x-unselectable rally-grid-cell-percentdonebystorycount percentdonebystorycount">' +
+                            '<div class="x-grid-cell-inner" style="display:inline-block;">OVERALL % DONE BY STORY PLANNED ESTIMATE: {PercentDoneByStoryPlanEstimate}</div>' +
+                            '</td>';
+                    }
+                }
+                return '';
+            },
+            apply: function(values) {
+                if (this.initialConfig) {
+                    if (this.initialConfig.showOverallPercentDoneByStoryPlanEstimate) {
+                        values.PercentDoneByStoryPlanEstimate = Ext.create('Rally.ui.renderer.template.progressbar.PercentDoneByStoryPlanEstimateTemplate', {
+                            width: '102px',
+                            isClickable: false,
+                            shouldShowPercentDone: function(recordData) {
+                                return true;
+                            },
+                            calculatePercent: function(recordData) {
+                                var total = 0;
+                                Ext.each(recordData.children, function(child) {
+                                    total += child.get("PercentDoneByStoryPlanEstimate");
+                                });
+                                return Math.round((total / recordData.children.length) * 100);
+                            },
+                        }).compile(values).apply(values);
+                    }
+                }
+            }
+        });
+
+        Ext.define('Rally.ui.plugin.template.OverallPercentDoneByStoryCountTemplateMixIn', {
+            build: function(config) {
+                if (config) {
+                    if (config.showOverallPercentDoneByStoryCount) {
+                        return '<td class="x-grid-cell x-grid-td wrap-text x-unselectable rally-grid-cell-percentdonebystorycount percentdonebystorycount">' +
+                            '<div class="x-grid-cell-inner" style="display:inline-block;">OVERALL % DONE BY STORY COUNT: {PercentDoneByStoryCount}</div>' +
+                            '</td>';
+                    }
+                }
+                return '';
+            },
+            apply: function(values) {
+                if (this.initialConfig) {
+                    if (this.initialConfig.showOverallPercentDoneByStoryCount) {
+                        values.PercentDoneByStoryCount = Ext.create('Rally.ui.renderer.template.progressbar.PercentDoneByStoryCountTemplate', {
+                            width: '102px',
+                            isClickable: false,
+                            shouldShowPercentDone: function(recordData) {
+                                return true;
+                            },
+                            calculatePercent: function(recordData) {
+                                var total = 0;
+                                Ext.each(recordData.children, function(child) {
+                                    total += child.get("PercentDoneByStoryCount");
+                                });
+                                return Math.round((total / recordData.children.length) * 100);
+                            },
+                        }).compile(values).apply(values);
+                    }
+                }
+            }
+        });
+
+        Ext.define('Rally.ui.plugin.template.OverallStatusTemplateMixin', {
+            requires: [
+                'Rally.util.Colors'
+            ],
+
+            constructor: function() {
+                // reset the colours to the only ones that we want to allow 
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE = [];
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
+                    value: Rally.util.Colors.lime.toUpperCase(),
+                    name: 'Green'
+                });
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
+                    value: Rally.util.Colors.yellow.toUpperCase(),
+                    name: 'Orange'
+                });
+                Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
+                    value: Rally.util.Colors.red_med.toUpperCase(),
+                    name: 'Red'
+                });
+            },
+            build: function(config) {
+                if (config) {
+                    if (config.showOverallStatus) {
+                        return '<td class="x-grid-cell x-grid-td wrap-text x-unselectable rally-grid-cell-displaycolor displaycolor">' +
+                            '<div class="x-grid-cell-inner" style="display:inline-block;">OVERALL STATUS:</div>' +
+                            '<div class="x-grid-cell-inner" style="display:inline-block; top: -2px; position: relative;">{OverallStatus}</div>' +
+                            '</td>';
+                    }
+                }
+                return '';
+            },
+            _getColorFromPalette: function(colorName) {
+                var values = Ext.Array.filter(Rally.util.Colors.DISPLAY_COLOR_PALETTE, function(value) {
+                    return value.name === colorName
+                }, this);
+                if (values.length == 1) {
+                    return values[0].value.toUpperCase();
+                }
+                return Rally.util.Colors.white.toUpperCase();
+            },
+            apply: function(values) {
+                var red = this._getColorFromPalette('Red'),
+                    orange = this._getColorFromPalette('Orange'),
+                    green = this._getColorFromPalette('Green');
+                if (this.initialConfig) {
+                    if (this.initialConfig.showOverallStatus) {
+                        values.DisplayColor = null;
+                        Ext.each(values.children, function(child) {
+                            var displayColor = child.get("DisplayColor").toUpperCase();
+                            if (!((displayColor == red) || (displayColor == orange) || (displayColor == green))) {
+                                values.DisplayColor = red;
+                                return false; // break								
+                            } else if (displayColor == red) {
+                                values.DisplayColor = red;
+                                return false; // break
+                            } else if (displayColor == orange) {
+                                values.DisplayColor = orange;
+                            }
+                        }, this);
+                        if (values.DisplayColor == null) {
+                            values.DisplayColor = green;
+                        }
+                        values.OverallStatus = Ext.create('Rally.ui.renderer.template.DisplayColorTemplate').compile(values).apply(values);
+                    }
+                }
+            }
+        });
+
+        Ext.define('Rally.ui.renderer.template.MyHeaderTemplate', {
+            extend: 'Ext.XTemplate',
+
+            mixins: {
+                bystoryestimate: 'Rally.ui.plugin.template.OverallPercentDoneByStoryPlanEstimateTemplateMixin',
+                bystorecount: 'Rally.ui.plugin.template.OverallPercentDoneByStoryCountTemplateMixIn',
+                overallstatus: 'Rally.ui.plugin.template.OverallStatusTemplateMixin'
+            },
+
+            constructor: function(config) {
+
+                this._callMixIn("constructor", null, config);
+
+                var mixinTemplates = '';
+                this._callMixIn("build", function(result) {
+                    mixinTemplates += result;
+                }, config);
+
+                var templateConfig = config && config.template || [
+                    '<table class="rally-grid x-grid-table" style="width: 100%; padding-left: -14px;">' +
+                    '<tr class="x-grid-row">' +
+                    '<td class="x-grid-cell x-grid-td wrap-text x-unselectable rally-grid-cell-name name" style="vertical-align: middle;">' +
+                    '<div class=".x-grid-cell-inner" style="display:inline-block;">{name}</div>' +
+                    '</td>' +
+                    mixinTemplates +
+                    '</tr>' +
+                    '</table>'
+                ];
+                templateConfig.push(this.config);
+                templateConfig.push(config);
+                return this.callParent(templateConfig);
+            },
+
+            _callMixIn: function(methodName, callback) {
+                if (this.mixins) {
+                    for (var mix in this.mixins) {
+                        if (typeof this.mixins[mix] === 'object') {
+                            if (this.mixins[mix][methodName] && typeof this.mixins[mix][methodName] === 'function') {
+                                if (typeof callback === 'function') {
+                                    var result = this.mixins[mix][methodName].apply(this, Array.prototype.slice.call(arguments, 2));
+                                    callback(result);
+                                } else {
+                                    this.mixins[mix][methodName].apply(this, Array.prototype.slice.call(arguments, 2));
+                                }
+                            }
+                        }
+                    }
+                }
+                return undefined;
+            },
+
+            apply: function(values) {
+                this._callMixIn("apply", null, values);
+                return this.callParent([values]);
+            },
+        });
+		
+		Ext.define('Rally.ui.grid.GridCsvExport', {
+			requires: ['Rally.data.wsapi.Filter'],
+			singleton: true,
+
+			buildCsvExportUrl: function (grid) {
+				var params = {},
+					store = grid.store;
+
+				var fetch = "FormattedID," + _.map(grid.columnCfgs, function (config) {
+					return config.dataIndex || config;
+				}).join();
+
+				var filter =  _(store.filters.items)
+					.map(function(filter) {
+						return filter instanceof Rally.data.wsapi.Filter ? filter : Rally.data.wsapi.Filter.fromExtFilter(filter);
+					})
+					.reduce(function(result, filter) {
+						return result.and(filter);
+					}) || '';
+
+				params.order = store.sorters.items[0].property + ' ' + store.sorters.items[0].direction;
+
+				var context = store.context || grid.getContext().getDataContext();
+				params.workspace = context.workspace;
+				params.project = context.project;
+				params.projectScopeDown = context.projectScopeDown;
+				params.projectScopeUp = context.projectScopeUp;
+				params.fetch = fetch;
+				params.query = filter.toString();
+
+				return Rally.environment.getServer().getWsapiUrl() + '/' + 'milestone' + '.csv?' + Ext.urlEncode(params);
+			}
+		});
+
+        Ext.define('Rally.example.GroupedGrid', {
+            extend: 'Rally.app.App',
+            componentCls: 'app',
+            grid: null,
+            settingsScope: 'workspace',
+
+            getSettingsFields: function() {
+                return [{
+                    name: 'query',
+                    type: 'query'
+                }, {
+                    name: 'Group By Field',
+                    xtype: 'rallyfieldcombobox',
+                    model: 'milestone'
+                }, {
+                    name: 'Additional Columns',
+                    xtype: 'rallyfieldcombobox',
+                    model: 'milestone',
+                    multiSelect: true,
+                    delimiter: ',',
+                    allowClear: false,
+                    allowNoEntry: false,
+                    initialValue: this.getSetting('Additional Columns'),
+                    value: this.getSetting('Additional Columns'),
+                    listeners: {
+                        ready: function(list, eOpts) {
+                            var app = Rally.getApp();
+                            var columnCfgs = [];
+                            if (app.getSetting('Additional Columns')) {
+                                columnCfgs = app.getSetting('Additional Columns').split(',');
+                            }
+                            list.setValue(columnCfgs);
+                        }
+                    }
+                }];
+            },
+
+            config: {
+                defaultSettings: {
+					'query': '((TargetProject.OID = "{projectOid}") And (c_FinanceCode != null))',
+                    'Group By Field': 'c_FinanceCode',
+                    'Additional Columns': [
+                        'FormattedID',
+						'TargetProject',
+						'TargetDate',
+                        'Name',                        						
+                        'Notes',
+						'c_FinanceCode'
+                    ].join(',')
+                }
+            },
+
+            _buildQueryFilter: function() {
+                var queries = [];
+                if (this.getSetting('query')) {
+                    try {					
+						var user = Rally.environment.getContext().getUser().getDisplayString();
+						var project = Rally.environment.getContext().getProject();
+						var q = this.getSetting('query');
+						q = q
+							.replace("{projectName}", project.Name)
+							.replace("{projectOid}", project.OID)
+							.replace("{user}", user);
+						queries.push(Rally.data.QueryFilter.fromQueryString(q));					
+                    } catch (e) {
+                        Rally.ui.notify.Notifier.showError({
+                            message: e.message
+                        });
+                    }
+                }
+                return queries;
+            },
+
+            getOptions: function() {
+                return _.union([{
+                    text: 'Reset', // menu option text
+                    handler: this.Reset,
+                    scope: this
+                }, 
+				{
+					text: 'Export',
+					handler: function() {
+						window.location = Rally.ui.grid.GridCsvExport.buildCsvExportUrl(this.grid);
+					},
+					scope: this
+				}
+				], this.callParent());
+            },
+
+            Reset: function() {
+                this.updateSettingsValues({
+                    settings: {
+                        'query': this.config.defaultSettings['query'],
+                        'Additional Columns': this.config.defaultSettings['Additional Columns'],
+                        'Group By Field': this.config.defaultSettings['Group By Field']
+                    },
+                    success: function() {
+                        var app = Rally.getApp();
+                        app.settings = this.config.defaultSettings;
+                        if (app.grid) app.remove(app.grid, true);
+                        app._load();
+                    },
+                    scope: this
+                });
+            },
+
+            _load: function() {
+                var groupByField = this.getSetting('Group By Field') || 'Parent';
+                var columnCfgs = ['FormattedID'];
+                if (this.getSetting('Additional Columns')) {
+                    columnCfgs = this.getSetting('Additional Columns').split(',');
+                }
+
+                Ext.Array.forEach(columnCfgs, function(col, index, all) {
+					if (col.indexOf('Date') !== -1) {
+						columnCfgs[index] = { dataIndex: col, xtype: 'datecolumn', format:'Y-m-d' }
+					}
+				});
+
+                this.grid = this.add({
+                    xtype: 'rallygrid',
+                    columnCfgs: columnCfgs,
+                    context: this.getContext(),
+                    features: [{
+                        ftype: 'groupingsummary',
+                        groupHeaderTpl: Ext.create('Rally.ui.renderer.template.MyHeaderTemplate', {
+                            showOverallPercentDoneByStoryPlanEstimate: columnCfgs.indexOf('PercentDoneByStoryPlanEstimate') > -1,
+                            showOverallPercentDoneByStoryCount: columnCfgs.indexOf('PercentDoneByStoryCount') > -1,
+                            showOverallStatus: columnCfgs.indexOf('DisplayColor') > -1
+                        })
+                    }],
+                    enableRanking: true,
+                    defaultSortToRank: true,
+                    storeConfig: {
+                        model: 'milestone',
+                        groupField: groupByField,
+                        groupDir: 'ASC',
+                        getGroupString: this._getGroupString,
+                        fetch: _.union([groupByField], columnCfgs),
+						
+                        filters: this._buildQueryFilter(),
+                    }
+                });
+            },
+
+            _getGroupString: function(record) {
+                try {
+                    var app = Rally.getApp();
+                    var groupByField = app.getSetting('Group By Field') || 'Parent';
+                    var field = record.store.model.getField(groupByField);
+                    try {
+                        var code = record.get(groupByField);
+                        if (groupByField === 'DisplayColor') {
+                            var values = {
+                                DisplayColor: code
+                            }
+                            return field.displayName + ': <div class="rally-grid x-grid-row x-grid-cell rally-grid-cell-displaycolor" style="border: none; display: inline-block; height: 12px; width: 12px;">' + Ext.create('Rally.ui.renderer.template.DisplayColorTemplate').compile(values).apply(values) + '</div>';
+                        }
+                        if (typeof code === 'object') {
+                            if (code.Name) {
+                                return field.displayName + ': ' + code.Name.toUpperCase();
+                            }
+                            if (code.DisplayString) {
+                                return field.displayName + ': ' + code.DisplayString.toUpperCase();
+                            }
+                        }
+                        if (typeof code === 'string') {
+                            if (code === '') {
+                                return field.displayName + ': NOT SPECIFIED';
+                            } else {
+                                return field.displayName + ': ' + code.toUpperCase();
+                            }
+                        }
+                        if (!isNaN(code)) {
+                            return field.displayName + ': ' + code;
+                        }
+                    } catch (e) {}
+                    return field.displayName + ': NOT SPECIFIED';
+                } catch (e) {
+                    return 'NOT SPECIFIED';
+                }
+            },
+
+            launch: function() {
+                this._load();
+            }
+        });
+
+        Rally.onReady(function() {
+            Rally.launchApp('Rally.example.GroupedGrid', {
+                name: 'Grouped Grid Example'
+            });
+        });
+
+    })();
+</script>
