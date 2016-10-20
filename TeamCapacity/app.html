@@ -1,8 +1,29 @@
 <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
 <script type="text/javascript">
-var app;
 (function() {
+	var app;
 	var Ext = window.Ext4 || window.Ext;    
+	
+	// HACK: Bug in EXTJS when adding a rawdata row to a model 
+	Ext.define("Ext.grid.column.Template", {
+		extend: Ext.grid.column.Column,
+		alias: ["widget.templatecolumn"],
+		alternateClassName: "Ext.grid.TemplateColumn",
+		initComponent: function() {
+			var a = this;
+			a.tpl = (!Ext.isPrimitive(a.tpl) && a.tpl.compile) ? a.tpl : new Ext.XTemplate(a.tpl);
+			a.hasCustomRenderer = true;
+			a.callParent(arguments)
+		},
+		defaultRenderer: function(c, d, a) {
+			if (a.data.data == "") {
+				a.data = a.raw;
+			}
+			var b = Ext.apply({}, a.data, a.getAssociatedData());
+			return this.tpl.apply(b)
+		}
+	});
+	
 	Ext.define('Rally.ui.renderer.template.UserTemplate', {
 		extend: 'Ext.XTemplate',
 		requires: [
@@ -18,7 +39,9 @@ var app;
 			sortable: true
 		},
 		constructor: function(config) {
+			var app = config.app || {};
 			this.initConfig(config);
+			
 			this.callParent([				
 					'<div class="card-owner-field" style="display: inline-block;">',
 						'<div class="field-content Owner">',
@@ -40,9 +63,15 @@ var app;
 						return cls.join(' ');
 					},
 					getOwnerTitle: function(recordData) {
+						if (recordData.Capacity === null) {
+							return (recordData.User ? Ext.String.htmlEncode(recordData.User._refObjectName) : 'No User') + ' *';                        
+						}
 						return recordData.User ? Ext.String.htmlEncode(recordData.User._refObjectName) : 'No User';                        
 					},
 					getProfileImageSrc: function(recordData) {
+						if (recordData.Capacity === null) {
+							
+						}
 						return recordData.User ? Rally.util.User.getProfileImageUrl(25, recordData.User) : Rally.util.User.getNoOwnerImageUrl();
 					}
 				}
@@ -64,10 +93,15 @@ var app;
 		constructor: function(config) {
 			this.initConfig(config);
 			this.callParent([			
-				'<div unselectable="on" class="x-grid-cell-inner " style="position: relative; top: -5px;">',
+				'<div unselectable="on" class="x-grid-cell-inner " style="position: relative; top: -5px; {[this.getStyle(values)]}">',
 					'<a href="#" onclick="javascript: if (app) app._clickHandler(this, \'{[this.getValue(values)]}\', \'{[this.getName(values)]}\');">Show Tasks</a>',
 				'</div>',
 				{
+					getStyle: function(recordData) {
+						if (recordData.Capacity === null) {
+							return "display: none;";
+						}
+					},
 					getValue: function(recordData) {
 						return recordData.User._ref;                        
 					},
@@ -77,7 +111,8 @@ var app;
 				}
 			]);
 		}
-	});	
+	});		
+	
 	Ext.define('CustomApp', {
 		extend: 'Rally.app.TimeboxScopedApp',
 		componentCls: 'app',
@@ -183,28 +218,30 @@ var app;
 					{
 						text: 'User',
 						xtype: 'templatecolumn',
-						flex: 1,						
-						tpl: Ext.create('Rally.ui.renderer.template.UserTemplate')
+						flex: 1,		
+						sortable: false, 						
+						tpl: Ext.create('Rally.ui.renderer.template.UserTemplate', { app: app, store: store })
 					},
 					{
 						text: 'Capacity',
 						dataIndex: 'Capacity',
 						flex: 1,
+						sortable: false, 
 						editor: {
 							xtype: 'rallytextfield',
 							maskRe: /[0-9]/,
 							validator: function (value) {
-								return (value === '' || (value > 0 && value <= 9999)) || 'Capacity must be > 0 and < 9999.';
+								return (value === '' || (value >= 0 && value <= 9999)) || 'Capacity must be > 0 and < 9999.';
 							},
 							rawToValue: function (value) {
 								return value === '' ? value : parseInt(value, 10);
 							}
 						}, 
-						emptyCellText : '0'
+						emptyCellText : 'Team member but not in iteration'
 					},
 					{
 						text: 'Original Task Estimates',
-						sortable: true, 
+						sortable: false, 
 						flex: 1, 
 						dataIndex: 'TaskEstimates',
 						emptyCellText : '0'
@@ -213,12 +250,14 @@ var app;
 						text: 'To Do',
 						dataIndex: 'ToDo',
 						flex: 1, 
+						sortable: false,
 						emptyCellText : '0'
 					},
 					{
 						text: 'Tasks',
 						xtype: 'templatecolumn',
 						flex: 1,						
+						sortable: false,
 						tpl: Ext.create('Rally.ui.renderer.template.TaskTemplate')
 					},
 					{
@@ -226,9 +265,12 @@ var app;
 						xtype: 'templatecolumn',
 						flex: 1,						
 						tpl: Ext.create('Rally.ui.renderer.template.progressbar.ProgressBarTemplate', {
-							sortable: true,
+							sortable: false, 
 							percentDoneName: 'UserLoad',
 							calculateColorFn: function (recordData) {
+								if (recordData.Capacity == null || recordData.Capacity == 0) {
+									return "#FCB5B1"; // Red // but doesnt show
+								}
 								if (recordData.UserLoad < 0.9) {
 									colVal = "#B2E3B6"; // Green
 								} else if (recordData.UserLoad < 1.0) {
@@ -237,8 +279,12 @@ var app;
 									colVal = "#FCB5B1"; // Red
 								}
 								return colVal;
-							}
-						})
+							},
+							generateLabelTextFn: function (recordData) {
+								if (!recordData.UserLoad) recordData.UserLoad = 0;
+								return this.calculatePercent(recordData) + '%';
+							},
+						}),
 					}
 				],
 				pagingToolbarCfg: {
@@ -248,39 +294,96 @@ var app;
 			app._hideMask();
 			app.add(app._myGrid);
 		},
-		_loadUserCapacity : function (store, records, tasks) {
-			this._showMask('Calculating to do and percentages...');
+		
+		_getTeamFilter: function(projectUUID) {
+			var filters = [];
+			filters.push({
+				property: 'TeamMemberships.ObjectUUID',
+				operator: '=',
+				value: projectUUID
+			});
+			return filters;
+		},
+		
+		_loadUserCapacity : function (store, records, tasks) {			
+
+			this._showMask('Loading all team members...');
 			
-			Ext.each(records, function (rec) {
-				if (!rec.data) {
-					return;
-				}				
-				var owner = rec.get('User'); 
-				var todo = 0;				
-				if (owner._refObjectName === "Brian Salt") debugger;
-				Ext.Array.each(app.taskData, function(task){				
-					if (owner && task.get('Owner') && task.get('Owner')._refObjectName === owner._refObjectName) { 
-						todo += task.get('ToDo');
-						console.log(task.get('Owner')._refObjectName, task.get('ToDo'));
-					}
-				});
-				
-				rec.data.ToDo = todo;				
-				rec.data.UserLoad = rec.data.ToDo / rec.data.Capacity;
-			}, this);
-			app._populateGrid(Ext.create('Rally.data.custom.Store', 
-				{ 
-					'model': 'user', 
-					data: records, 
-					listeners: {
-						update: function( store, rec, operation, modifiedFieldNames, eOpts ) {							
-							if (operation === "edit" && modifiedFieldNames[0] === "Capacity") {
-								rec.set("UserLoad", rec.data.ToDo / rec.data.Capacity);
+			var projectUUID = null;
+			if (records && records.length > 0) {
+				projectUUID = records[0].data.Project._refObjectUUID;
+			}
+		
+			Ext.create('Rally.data.WsapiDataStore', {
+				model: 'User',
+				filters: app._getTeamFilter(projectUUID),
+				autoLoad: true,
+				context: this.getContext().getDataContext(),
+				listeners: {
+					load: function(newstore, teammembers) {												
+						this._showMask('Calculating to do and percentages...');
+						
+						var data = [];
+						
+						Ext.each(records, function (rec) {
+							if (!rec.data) {
+								return;
+							}				
+							var owner = rec.get('User'); 
+							var todo = 0;				
+							Ext.Array.each(app.taskData, function(task){				
+								if (owner && task.get('Owner') && task.get('Owner')._refObjectName === owner._refObjectName) { 
+									todo += task.get('ToDo');									
+								}
+							});
+							
+							if (rec.data.Capacity === null) {
+								rec.data.Capacity = 0;
+							};
+							
+							rec.data.ToDo = todo;
+							rec.data.UserLoad = 0;
+							if (rec.data.Capacity > 0) {
+								rec.data.UserLoad = (todo / rec.data.Capacity);
 							}
-						}
-					}
+							
+							data.push(rec);									
+														
+							teammembers = Ext.Array.filter(teammembers, function(item, index) { 
+								return item.data.ObjectUUID != owner._refObjectUUID;
+							});
+							
+						}, this);
+																								
+						var gridStore = Ext.create('Rally.data.custom.Store', 
+							{ 
+								model: 'UserIterationCapacity', 
+								data: data, 
+								listeners: {
+									update: function( store, rec, operation, modifiedFieldNames, eOpts ) {							
+										if (operation === "edit" && modifiedFieldNames[0] === "Capacity") {
+											rec.set("UserLoad", rec.data.ToDo / rec.data.Capacity);
+										}
+									}
+								},
+								autoLoad: true
+							}).load(function() {							
+								Ext.each(teammembers, function(member) {								
+									gridStore.loadRawData({
+										Capacity: null,
+										TaskEstimates: 0, 
+										ToDo: 0,
+										User: member.data, 
+										UserLoad: 0,
+									}, true);
+								});
+							});
+						
+						app._populateGrid(gridStore);
+					},
+					scope: this
 				}
-			));
+			});			
 		},
 		_loadTasks: function (store, records) {
 			app.taskData = records;
@@ -377,6 +480,7 @@ var app;
 	});
 	
 	Rally.onReady(function () {
+		debugger;
 		Rally.launchApp('CustomApp', {
 			name: "TeamCapacityGrid"
 		});
