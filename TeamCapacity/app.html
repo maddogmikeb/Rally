@@ -221,7 +221,7 @@
                         tpl: Ext.create('Rally.ui.renderer.template.UserTemplate', { app: app, store: store })
                     },
                     {
-                        text: 'Capacity',
+                        text: 'Capacity (Click to edit)',
                         dataIndex: 'Capacity',
                         flex: 1,
                         sortable: false, 
@@ -259,7 +259,7 @@
                         tpl: Ext.create('Rally.ui.renderer.template.TaskTemplate')
                     },
                     {
-                        text: 'Load',
+                        text: 'Load (To Do / Capacity)',
                         xtype: 'templatecolumn',
                         flex: 1,						
                         tpl: Ext.create('Rally.ui.renderer.template.progressbar.ProgressBarTemplate', {
@@ -382,19 +382,28 @@
 										}
 									}
 								},
-								autoLoad: true
+								autoLoad: true,
+								sorters: [{
+									sorterFn: function(o1, o2){									
+										return (o1.data.ToDo || 0) > (o2.data.ToDo || 0) ? -1 : 1;
+									}
+								}]
 							}).load(function() {							
-								Ext.each(teammembers, function(member) {								
-									gridStore.loadRawData({
-										Capacity: null,
-										TaskEstimates: 0, 
-										ToDo: 0,
-										User: member.data, 
-										UserLoad: 0,
-									}, true);
-								});
+								Ext.each(teammembers, function(member) {																
+									var result  = gridStore.proxy.reader.read({
+											Capacity: null,
+											TaskEstimates: 0, 
+											ToDo: 0,
+											User: member.data, 
+											UserLoad: 0,
+										});
+									if (result.success && result.records.length === 1) {
+										var record = result.records[0];
+										gridStore.addSorted(record);
+									}
+								});								
 							});
-						
+												
 						app._populateGrid(gridStore);
 					},
 					scope: this
