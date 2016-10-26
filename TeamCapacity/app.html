@@ -16,7 +16,7 @@
 			a.callParent(arguments)
 		},
 		defaultRenderer: function(c, d, a) {
-			if (a.data.data == "") {
+			if (Ext.Object.isEmpty(a.data) || a.data.data == "") {
 				a.data = a.raw;
 			}
 			var b = Ext.apply({}, a.data, a.getAssociatedData());
@@ -505,7 +505,7 @@
 	});
 	
 	Rally.onReady(function () {
-		//debugger;
+		debugger;
 		Rally.launchApp('CustomApp', {
 			name: "TeamCapacityGrid"
 		});
