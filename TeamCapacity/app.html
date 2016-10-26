@@ -63,15 +63,9 @@
 						return cls.join(' ');
 					},
 					getOwnerTitle: function(recordData) {
-						if (recordData.Capacity === null) {
-							return (recordData.User ? Ext.String.htmlEncode(recordData.User._refObjectName) : 'No User') + ' *';                        
-						}
 						return recordData.User ? Ext.String.htmlEncode(recordData.User._refObjectName) : 'No User';                        
 					},
 					getProfileImageSrc: function(recordData) {
-						if (recordData.Capacity === null) {
-							
-						}
 						return recordData.User ? Rally.util.User.getProfileImageUrl(25, recordData.User) : Rally.util.User.getNoOwnerImageUrl();
 					}
 				}
@@ -94,7 +88,7 @@
 			this.initConfig(config);
 			this.callParent([			
 				'<div unselectable="on" class="x-grid-cell-inner " style="position: relative; top: -5px; {[this.getStyle(values)]}">',
-					'<a href="#" onclick="javascript: if (app) app._clickHandler(this, \'{[this.getValue(values)]}\', \'{[this.getName(values)]}\');">Show Tasks</a>',
+					'<a href="#" onclick="javascript: Rally.getApp()._clickHandler(this, \'{[this.getValue(values)]}\', \'{[this.getName(values)]}\');">Show Tasks</a>',
 				'</div>',
 				{
 					getStyle: function(recordData) {
@@ -205,94 +199,105 @@
 				this._loadGrid();
 			}
 		},
-		_populateGrid : function(store) {		
-			app._myGrid = Ext.create("Rally.ui.grid.Grid", {
-				xtype: 'rallygrid',
-				layout: 'fit',
-				enableColumnHide: false,
-				showRowActionsColumn: false,
-				enableEditing: true,
-				forceFit: true,
-				store: store,
-				columnCfgs: [
-					{
-						text: 'User',
-						xtype: 'templatecolumn',
-						flex: 1,		
-						sortable: false, 						
-						tpl: Ext.create('Rally.ui.renderer.template.UserTemplate', { app: app, store: store })
-					},
-					{
-						text: 'Capacity',
-						dataIndex: 'Capacity',
-						flex: 1,
-						sortable: false, 
-						editor: {
-							xtype: 'rallytextfield',
-							maskRe: /[0-9]/,
-							validator: function (value) {
-								return (value === '' || (value >= 0 && value <= 9999)) || 'Capacity must be > 0 and < 9999.';
-							},
-							rawToValue: function (value) {
-								return value === '' ? value : parseInt(value, 10);
-							}
-						}, 
-						emptyCellText : 'Team member but not in iteration'
-					},
-					{
-						text: 'Original Task Estimates',
-						sortable: false, 
-						flex: 1, 
-						dataIndex: 'TaskEstimates',
-						emptyCellText : '0'
-					},
-					{
-						text: 'To Do',
-						dataIndex: 'ToDo',
-						flex: 1, 
-						sortable: false,
-						emptyCellText : '0'
-					},
-					{
-						text: 'Tasks',
-						xtype: 'templatecolumn',
-						flex: 1,						
-						sortable: false,
-						tpl: Ext.create('Rally.ui.renderer.template.TaskTemplate')
-					},
-					{
-						text: 'Load',
-						xtype: 'templatecolumn',
-						flex: 1,						
-						tpl: Ext.create('Rally.ui.renderer.template.progressbar.ProgressBarTemplate', {
-							sortable: false, 
-							percentDoneName: 'UserLoad',
-							calculateColorFn: function (recordData) {
-								if (recordData.Capacity == null || recordData.Capacity == 0) {
-									return "#FCB5B1"; // Red // but doesnt show
-								}
-								if (recordData.UserLoad < 0.9) {
-									colVal = "#B2E3B6"; // Green
-								} else if (recordData.UserLoad < 1.0) {
-									colVal = "#FBDE98"; // Orange
-								} else {
-									colVal = "#FCB5B1"; // Red
-								}
-								return colVal;
-							},
-							generateLabelTextFn: function (recordData) {
-								if (!recordData.UserLoad) recordData.UserLoad = 0;
-								return this.calculatePercent(recordData) + '%';
-							},
-						}),
+		_populateGrid : function(store) {
+            if (app._myGrid !== undefined) {
+                app._myGrid.destroy();
+            }
+
+            app._myGrid = Ext.create("Rally.ui.grid.Grid", {
+                xtype: 'rallygrid',
+                layout: 'fit',
+                enableColumnHide: false,
+                showRowActionsColumn: false,
+                enableEditing: true,
+                forceFit: true,
+                store: store,
+                columnCfgs: [
+                    {
+                        text: 'User',
+                        xtype: 'templatecolumn',
+                        flex: 1,		
+                        sortable: false, 						
+                        tpl: Ext.create('Rally.ui.renderer.template.UserTemplate', { app: app, store: store })
+                    },
+                    {
+                        text: 'Capacity',
+                        dataIndex: 'Capacity',
+                        flex: 1,
+                        sortable: false, 
+                        editor: {
+                            xtype: 'rallytextfield',
+                            maskRe: /[0-9]/,
+                            validator: function (value) {
+                                return (value === '' || (value >= 0 && value <= 9999)) || 'Capacity must be > 0 and < 9999.';
+                            },
+                            rawToValue: function (value) {
+                                return value === '' ? value : parseInt(value, 10);
+                            }
+                        }, 
+                        emptyCellText : 'Team member but not in iteration'
+                    },
+                    {
+                        text: 'Original Task Estimates',
+                        sortable: false, 
+                        flex: 1, 
+                        dataIndex: 'TaskEstimates',
+                        emptyCellText : '0'
+                    },
+                    {
+                        text: 'To Do',
+                        dataIndex: 'ToDo',
+                        flex: 1, 
+                        sortable: false,
+                        emptyCellText : '0'
+                    },
+                    {
+                        text: 'Tasks',
+                        xtype: 'templatecolumn',
+                        flex: 1,						
+                        sortable: false,
+                        tpl: Ext.create('Rally.ui.renderer.template.TaskTemplate')
+                    },
+                    {
+                        text: 'Load',
+                        xtype: 'templatecolumn',
+                        flex: 1,						
+                        tpl: Ext.create('Rally.ui.renderer.template.progressbar.ProgressBarTemplate', {
+                            sortable: false, 
+                            percentDoneName: 'UserLoad',
+                            calculateColorFn: function (recordData) {
+                                if (recordData.Capacity == null || recordData.Capacity == 0) {
+                                    return "#FCB5B1"; // Red // but doesnt show
+                                }
+                                if (recordData.UserLoad < 0.9) {
+                                    colVal = "#B2E3B6"; // Green
+                                } else if (recordData.UserLoad < 1.0) {
+                                    colVal = "#FBDE98"; // Orange
+                                } else {
+                                    colVal = "#FCB5B1"; // Red
+                                }
+                                return colVal;
+                            },
+                            generateLabelTextFn: function (recordData) {
+                                if (!recordData.UserLoad) recordData.UserLoad = 0;
+                                return this.calculatePercent(recordData) + '%';
+                            },
+                        }),
+                    }
+                ],
+				listeners : {
+					beforeedit: function(that, obj, eOpts ) {
+						// don't allow editing of the capacity for team members who do not have any tasks 
+						// as they come from the custom story and wont update anyway 
+						return !(obj.field === 'Capacity' && obj.record.store.proxy.type === "custom");
 					}
-				],
-				pagingToolbarCfg: {
-					pageSizes: [200]
-				}
-			});
-			app._hideMask();
-			app.add(app._myGrid);
+				},
+                pagingToolbarCfg: {
+                    pageSizes: [200]
+                }
+            });            
+            app._hideMask();
+            app.add(app._myGrid);
 		},
 		
 		_getTeamFilter: function(projectUUID) {
@@ -301,6 +306,11 @@
 				property: 'TeamMemberships.ObjectUUID',
 				operator: '=',
 				value: projectUUID
+			});
+			filters.push({
+				property: 'Disabled',
+				operator: '=',
+				value: 'False'
 			});
 			return filters;
 		},
@@ -480,7 +490,7 @@
 	});
 	
 	Rally.onReady(function () {
-		debugger;
+		//debugger;
 		Rally.launchApp('CustomApp', {
 			name: "TeamCapacityGrid"
 		});
