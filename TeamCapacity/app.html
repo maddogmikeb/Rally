@@ -279,6 +279,12 @@
                                 return colVal;
                             },
                             generateLabelTextFn: function (recordData) {
+								if (recordData.Capacity == 0) {
+									return "No Capacity Recorded";
+								}
+								if (recordData.Capacity == null) {
+									return "";
+								}
                                 if (!recordData.UserLoad) recordData.UserLoad = 0;
                                 return this.calculatePercent(recordData) + '%';
                             },
