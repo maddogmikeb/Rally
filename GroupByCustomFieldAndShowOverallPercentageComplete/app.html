@@ -72,6 +72,40 @@
                 }
             }
         });
+		
+		Ext.define('Rally.ui.grid.GridCsvExport', {
+			requires: ['Rally.data.wsapi.Filter'],
+			singleton: true,
+
+			buildCsvExportUrl: function (grid) {
+				var params = {},
+					store = grid.store;
+
+				var fetch = "FormattedID," + _.map(grid.columnCfgs, function (config) {
+					return config.dataIndex || config;
+				}).join();
+
+				var filter =  _(store.filters.items)
+					.map(function(filter) {
+						return filter instanceof Rally.data.wsapi.Filter ? filter : Rally.data.wsapi.Filter.fromExtFilter(filter);
+					})
+					.reduce(function(result, filter) {
+						return result.and(filter);
+					}) || '';
+
+				params.order = store.sorters.items[0].property + ' ' + store.sorters.items[0].direction;
+
+				var context = store.context || grid.getContext().getDataContext();
+				params.workspace = context.workspace;
+				params.project = context.project;
+				params.projectScopeDown = context.projectScopeDown;
+				params.projectScopeUp = context.projectScopeUp;
+				params.fetch = fetch;
+				params.query = filter.toString();
+
+				return Rally.environment.getServer().getWsapiUrl() + '/' + 'portfolioitem' + '.csv?' + Ext.urlEncode(params);
+			}
+		});
 
         Ext.define('Rally.ui.plugin.template.OverallStatusTemplateMixin', {
             requires: [
@@ -82,15 +116,15 @@
                 // reset the colours to the only ones that we want to allow 
                 Rally.util.Colors.DISPLAY_COLOR_PALETTE = [];
                 Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
-                    value: Rally.util.Colors.green.toUpperCase(),
+                    value: Rally.util.Colors.lime.toUpperCase(),
                     name: 'Green'
                 });
                 Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
-                    value: Rally.util.Colors.orange.toUpperCase(),
+                    value: Rally.util.Colors.yellow.toUpperCase(),
                     name: 'Orange'
                 });
                 Rally.util.Colors.DISPLAY_COLOR_PALETTE.push({
-                    value: Rally.util.Colors.logo_red.toUpperCase(),
+                    value: Rally.util.Colors.red_med.toUpperCase(),
                     name: 'Red'
                 });
             },
@@ -273,7 +307,14 @@
                     text: 'Reset', // menu option text
                     handler: this.Reset,
                     scope: this
-                }], this.callParent());
+                }, 
+				{
+					text: 'Export',
+					handler: function() {
+						window.location = Rally.ui.grid.GridCsvExport.buildCsvExportUrl(this.grid);
+					},
+					scope: this
+				}], this.callParent());
             },
 
             Reset: function() {
@@ -325,47 +366,76 @@
                         getGroupString: this._getGroupString,
                         fetch: _.union([groupByField], columnCfgs),
                         filters: this._buildQueryFilter(),
+                        limit : Infinity
+                    },
+                    pagingToolbarCfg: {
+                        pageSizes: [200]
                     }
                 });
             },
 
             _getGroupString: function(record) {
-                try {
-                    var app = Rally.getApp();
-                    var groupByField = app.getSetting('Group By Field') || 'Parent';
-                    var field = record.store.model.getField(groupByField);
-                    try {
-                        var code = record.get(groupByField);
-                        if (groupByField === 'DisplayColor') {
-                            var values = {
-                                DisplayColor: code
-                            }
-                            return field.displayName + ': <div class="rally-grid x-grid-row x-grid-cell rally-grid-cell-displaycolor" style="border: none; display: inline-block; height: 12px; width: 12px;">' + Ext.create('Rally.ui.renderer.template.DisplayColorTemplate').compile(values).apply(values) + '</div>';
-                        }
-                        if (typeof code === 'object') {
-                            if (code.Name) {
-                                return field.displayName + ': ' + code.Name.toUpperCase();
-                            }
-                            if (code.DisplayString) {
-                                return field.displayName + ': ' + code.DisplayString.toUpperCase();
-                            }
-                        }
-                        if (typeof code === 'string') {
-                            if (code === '') {
-                                return field.displayName + ': NOT SPECIFIED';
-                            } else {
-                                return field.displayName + ': ' + code.toUpperCase();
-                            }
-                        }
-                        if (!isNaN(code)) {
-                            return field.displayName + ': ' + code;
-                        }
-                    } catch (e) {}
-                    return field.displayName + ': NOT SPECIFIED';
-                } catch (e) {
-                    return 'NOT SPECIFIED';
+				var app = Rally.getApp();		
+				var value = app._getGroupInsides(record);				
+				return "<div onmouseout='javascript:return Rally.getApp()._unpublishMessage();' onmouseover='javascript:return Rally.getApp()._publishMessage(\"" + value.data + "\");'>" + value.html + "</div>";
+			},
+			
+			_unpublishMessage: function(row) {
+				Rally.getApp().publish('gridGroupSelect', '');
+				return false;
+			},
+			
+			_publishMessage: function(data) {
+				var app = Rally.getApp();
+				var groupByField = app.getSetting('Group By Field') || 'Parent';
+				if (data === 'NOT SPECIFIED') data = "null";
+				app.publish('gridGroupSelect', '(' + groupByField + ' = "' + data + '")');
+				return false;
+			},
+			
+			_getGroupInsides: function(record) {
+				try {
+					var app = Rally.getApp();
+					var groupByField = app.getSetting('Group By Field') || 'Parent';
+					var field = record.store.model.getField(groupByField);
+					return app._getFieldData(groupByField, field, record);
+				} catch (e) {
+                    return { data: 'NOT SPECIFIED', html: 'NOT SPECIFIED'};
                 }
             },
+			
+			_getFieldData: function(groupByField, field, record) {
+				try {
+					var code = record.get(groupByField);
+					if (groupByField === 'DisplayColor') {
+						var values = {
+							DisplayColor: code
+						}
+						return { data: code, html: field.displayName + ': <div class="rally-grid x-grid-row x-grid-cell rally-grid-cell-displaycolor" style="border: none; display: inline-block; height: 12px; width: 12px;">' + Ext.create('Rally.ui.renderer.template.DisplayColorTemplate').compile(values).apply(values) + '</div>' };
+					}
+					if (typeof code === 'object') {
+						if (code.Name) {
+							return { data: code.Name.toUpperCase(), html: field.displayName + ': ' + code.Name.toUpperCase()};
+						}
+						if (code.DisplayString) {
+							return { data: code.DisplayString.toUpperCase(), html: field.displayName + ': ' + code.DisplayString.toUpperCase()};
+						}
+					}
+					if (typeof code === 'string') {
+						if (code === '') {
+							return { data: 'NOT SPECIFIED', html: field.displayName + ': NOT SPECIFIED'};
+						} else {
+							return { data: code.toUpperCase(), html: field.displayName + ': ' + code.toUpperCase()};
+						}
+					}
+					if (!isNaN(code)) {
+						return { data: code, html: field.displayName + ': ' + code};
+					}
+					return { data: 'NOT SPECIFIED', html: field.displayName + ': NOT SPECIFIED'};
+				} catch (e) {
+					return { data: 'NOT SPECIFIED', html: 'NOT SPECIFIED'};
+				}				
+			},
 
             launch: function() {
                 this._load();
