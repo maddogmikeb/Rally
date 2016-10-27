@@ -306,12 +306,13 @@
             app.add(app._myGrid);
 		},
 		
-		_getTeamFilter: function(projectUUID) {
+		_getTeamFilter: function() {
+			debugger;
 			var filters = [];
 			filters.push({
 				property: 'TeamMemberships.ObjectUUID',
 				operator: '=',
-				value: projectUUID
+				value: Rally.environment.getContext().context.scope.project._refObjectUUID
 			});
 			filters.push({
 				property: 'Disabled',
@@ -324,15 +325,10 @@
 		_loadUserCapacity : function (store, records, tasks) {			
 
 			this._showMask('Loading all team members...');
-			
-			var projectUUID = null;
-			if (records && records.length > 0) {
-				projectUUID = records[0].data.Project._refObjectUUID;
-			}
 		
 			Ext.create('Rally.data.WsapiDataStore', {
 				model: 'User',
-				filters: app._getTeamFilter(projectUUID),
+				filters: app._getTeamFilter(),
 				autoLoad: true,
 				context: this.getContext().getDataContext(),
 				listeners: {
@@ -376,7 +372,7 @@
 								model: 'UserIterationCapacity', 
 								data: data, 
 								listeners: {
-									update: function( store, rec, operation, modifiedFieldNames, eOpts ) {							
+									update: function(store, rec, operation, modifiedFieldNames) {							
 										if (operation === "edit" && modifiedFieldNames[0] === "Capacity") {
 											rec.set("UserLoad", rec.data.ToDo / rec.data.Capacity);
 										}
