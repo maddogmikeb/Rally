@@ -1,0 +1,314 @@
+<meta name="Name" content="App: TimeInStateChartApp" />
+<meta name="Version" content="2016.07.12" />
+<meta name="Vendor" content="maddogmikeb" />
+<script type="text/javascript" src="/apps/2.0/sdk.js?debug=true"></script>
+<script type="text/javascript" src="/apps/2.0/lib/analytics/analytics-all.js"></script>
+<script type="text/javascript">
+
+    Ext.define('SizeCalculator', {
+        extend: 'Rally.data.lookback.calculator.TimeInStateCalculator',
+        constructor: function (config) {
+            this.initConfig(config);
+            this.callParent(arguments);
+        },
+
+        _getTimeline: function () {
+            var config = {
+                startOn: new this.lumenize.Time(this.startDate, this.config.granularity, this.config.tz),
+                endBefore: new this.lumenize.Time(this.endDate, this.config.granularity, this.config.tz),
+                workDays: this.config.workDays
+            };
+            return new this.lumenize.Timeline(config);
+        },
+
+        runCalculation: function (snapshots) {
+            this.startDate = this._getStartDate(snapshots);
+            this.endDate = this._getEndDate(snapshots);
+            return this._calculateTimeInState(snapshots);
+        },
+
+        _calculateTimeInState: function (results) {
+            var timeline = this._getTimeline();
+
+            var newResults = [];
+            Ext.each(results, function (record) {
+                record.ticks = Math.abs(timeline.ticksThatIntersect(record._ValidFrom, record._ValidTo, this.config.tz).length / 24);
+                record.Ready = record.Ready ? "true" : "false";
+
+                var ckey = record.ObjectID + record[this.config.stateField] + record.Ready;
+                if (!(newResults[ckey])) {
+                    newResults[ckey] = record;
+                } else {
+                    newResults[ckey].ticks += record.ticks;
+                }
+            }, this);
+
+            var r2 = [];
+            for (var r in newResults) {
+                var val = newResults[r];
+                if (val.ScheduleState === undefined) {
+                    val.ScheduleState = "Defined";
+                }
+                if (val.Ready === undefined) {
+                    val.Ready = false;
+                }
+                r2.push(val);
+            };
+
+            var config = this._getCubeConfig();
+            var cube = new this.lumenize.OLAPCube(config);
+            try { 
+                cube.addFacts(r2);
+            } catch (ex) {
+                console.log(ex);
+            }
+
+            var data = Array.apply(null, Array(this.fields.length)).map(function () { return [0, 0, 0, 0, 0] });
+            Ext.each(cube.getCells(), function (value) {
+                var index = this.fields.indexOf(value[this.config.stateField] + (value.Ready === 'true' ? ' (ready)' : ''));
+                data[index] = [
+                    value.timeInState_min,
+                    value.timeInState_p25,
+                    value.timeInState_p50,
+                    value.timeInState_p75,
+                    value.timeInState_max
+                ];
+            }, this);
+
+            return {
+                series: [{
+                    type: 'boxplot',
+                    name: 'Time',
+                    data: data
+                }]
+            };
+        },
+
+        _getCubeConfig: function () {
+            var self = this;
+
+            var p25 = this.lumenize.functions.percentileCreator(25);
+            var p50 = this.lumenize.functions.percentileCreator(50);
+            var p75 = this.lumenize.functions.percentileCreator(75);
+            var p95 = this.lumenize.functions.percentileCreator(95);
+
+            return {
+                // keepTotals: true,
+                dimensions: [
+                    { 'field': self.config.stateField },
+                    { 'field': 'Ready' }
+                ],
+                metrics: [
+                    { field: 'ticks', f: 'sum', as: 'timeInState_total' },
+                    { field: 'ticks', f: 'min', as: 'timeInState_min' },
+                    { field: 'ticks', f: p25, as: 'timeInState_p25' },
+                    { field: 'ticks', f: p50, as: 'timeInState_p50' },
+                    { field: 'ticks', f: p75, as: 'timeInState_p75' },
+                    { field: 'ticks', f: p95, as: 'timeInState_max' }
+                ]
+            };
+        },
+    });
+
+    Ext.define('WorkTypeChartApp', {
+        extend: 'Rally.app.App',
+        requires: [
+            'SizeCalculator'
+        ],
+        settingsScope: 'app',
+
+        startDate: null,
+        endDate: null,
+
+        defaultValue: 'Not Set',
+        fieldName: null,
+        chart: null,
+
+        config: {
+            defaultSettings: {
+                'Number of Weeks': 12,
+                'Field': 'ScheduleState'
+            }
+        },
+
+        _getSunday: function (d) {
+            var date = new Date(d);
+            var day = date.getDay() || 7;
+            if (day !== 1)
+                date.setHours(-24 * (day - 1));
+            date.setHours(-24);
+            date.setHours(0, 0, 0, 0); // set to midnight
+            return date;
+        },
+
+        _buttonClick: function (e) {
+            var app = Rally.getApp();
+
+            Ext.create('Rally.ui.dialog.Dialog', {
+                autoShow: true,
+                draggable: true,
+                closable: true,
+                width: 300,
+                title: 'Information',
+                items: {
+                    xtype: 'component',
+                    html: '<div></div>',
+                    padding: 10
+                },
+                listeners: {
+                    close: function (e, o) {
+                        app.refresh();
+                    }
+                }
+            });
+        },
+
+        refresh: function () {
+            var app = Rally.getApp();
+            app.chart.destroy();
+            app._loadData();
+        },
+
+        launch: function () {
+            this.startDate = Rally.util.DateTime.add(this._getSunday(new Date()), "day", (0 - parseInt(this.getSetting('Number of Weeks'))) * 7);
+            this.endDate = this._getSunday(new Date());
+
+            var button = Ext.create('Rally.ui.Button', {
+                text: 'Loading...',
+                handler: Rally.getApp()._buttonClick, 
+                style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    'z-index': 199
+                }
+            });
+
+            this.add(button);
+
+            this._loadData();
+        },
+
+        _afterRender: function () {
+            var hc = Rally.getApp().chart.down('highchart');
+            if (hc) {
+                hc.chartConfig.xAxis.categories = Rally.getApp()._getSeriesNames(); // not sure why we have to do this again
+            }            
+
+            Rally.getApp()._updateButtonText(false);
+        },
+
+        _updateButtonText : function(isLoading) {
+            var button = Rally.getApp().down('button');
+            if (!button) {
+                return;
+            }
+            if (isLoading) {                
+                button.handler = function () { };
+                button.setText("Loading...");
+            } else {                
+                button.handler = Rally.getApp()._buttonClick;
+                button.setText("Information");
+            }
+        },
+
+        _loadData: function () {
+
+            Rally.getApp()._updateButtonText(true);
+
+            this.fieldName = this.getSetting('Field');
+
+            this.chart = Ext.create('Rally.ui.chart.Chart', {
+                storeType: 'Rally.data.lookback.SnapshotStore',
+                storeConfig: this._getStoreConfig(),
+                chartConfig: this._getChartConfig(),
+                calculatorType: 'SizeCalculator',
+                calculatorConfig: {
+                    trackLastValueForTheseFields: ['_ValidTo', 'Ready', this.fieldName],
+                    fields: this._getSeriesNames(),
+                    stateField: this.fieldName,
+                    granularity: 'hour',
+                    tz: "Australia/Brisbane"
+                },
+                updateAfterRender: this._afterRender
+            });
+
+            this.add(this.chart);
+        },
+
+        _getStoreConfig: function () {
+            return {
+                find: {
+                    _TypeHierarchy: { '$in': ['HierarchicalRequirement'] },
+                    Children: null,
+                    _ProjectHierarchy: this.getContext().getProject().ObjectID,
+                    _ValidFrom: { '$gt': Rally.util.DateTime.toIsoString(this.startDate), '$lt': Rally.util.DateTime.toIsoString(this.endDate) }
+                },
+                fetch: [this.fieldName, 'Ready'],
+                hydrate: [this.fieldName],
+                sort: {
+                    _ValidFrom: 1
+                },
+                context: this.getContext().getDataContext(),
+                limit: Infinity
+            };
+        },
+
+        _getSeriesNames: function () {
+            return [
+                'Backlog', 'Backlog (ready)',
+                'Defined', 'Defined (ready)',
+                'In-Progress', 'In-Progress (ready)',
+                'Completed', 'Completed (ready)',
+                'Accepted', 'Accepted (ready)'
+            ];
+        },
+
+        _getChartConfig: function () {
+            return {
+                chart: {
+                    type: 'boxplot'
+                },
+                title: {
+                    text: 'Work Sizes Throughput'
+                },
+                subtitle: {
+                    text: "<div style='font-size: 12px;'>Smaller box 'tails' are generally better. Smaller overall box is generally better.</div>",
+                    useHTML: true
+                },
+                legend: {
+                    enabled: false
+                },
+                xAxis: {
+                    categories: this._getSeriesNames()
+                },
+                yAxis: {
+                    min: 0,
+                    title: {
+                        text: 'Days in state'
+                    },
+                    tickInterval: 10
+                },
+                tooltip: {
+                    formatter: this._tooltipFormatter
+                }
+            };
+        },
+
+        _tooltipFormatter: function () {
+            return '<b><u>' + this.point.category + '</u></b><br/>' +
+                '<b>Max:</b> ' + this.point.high.toFixed(2) + '<br/>' +
+                '<b>p75:</b> ' + this.point.q3.toFixed(2) + '<br/>' +
+                '<b>Median:</b> ' + this.point.median.toFixed(2) + '<br/>' +
+                '<b>p25:</b> ' + this.point.q1.toFixed(2) + '<br/>' +
+                '<b>Min:</b> ' + this.point.low.toFixed(2) + '<br/>';
+        }
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('WorkTypeChartApp', {
+            name: 'Work Type Chart App'
+        });
+    });
+
+</script>
