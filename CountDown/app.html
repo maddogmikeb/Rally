@@ -1,0 +1,147 @@
+<meta name="Name" content="App: CounddownApp" />
+<meta name="Version" content="2016.12.20" />
+<meta name="Vendor" content="maddogmikeb" />
+<style>
+
+.x-form-display-field {
+    font-size: 26pt !important;
+}
+
+</style>
+<script type="text/javascript" src="/apps/2.0/sdk.js?debug=true"></script>
+<script type="text/javascript">
+
+    Ext.define('CountdownApp', {
+        extend: 'Rally.app.App',
+        settingsScope: 'app',
+
+        endDate: null,
+        interval: null,
+
+        config: {
+            defaultSettings: {
+                'End date': '12/25/2020', //new Date(2020,12,25,12,00,00),
+                'Event name': 'Xmas Lunch 2020', 
+                'Event start time (24 hour time, e.g. 12:00)' : '12:00'
+            }
+        },
+
+        getSettingsFields: function() {
+            return [{
+                    name: 'End date',
+                    xtype: 'datefield',
+                    value: this.getSetting('End date')
+                },{
+                    name: 'Event name',
+                    xtype: 'rallytextfield',
+                    value: this.getSetting('Event name')
+                },{
+                    name: 'Event start time (24 hour time, e.g. 12:00)',
+                    xtype: 'rallytextfield',
+                    value: this.getSetting('Event start time (24 hour time, e.g. 12:00)')
+                }];
+        },
+
+        refresh: function () {
+            var app = Rally.getApp();
+            app._stop();
+            app._loadData();
+        },
+
+        _stop: function() {
+            var app = Rally.getApp();
+            if (app.interval) {
+                window.clearInterval(app.interval); 
+            }
+            app.interval = null;
+        },
+
+        launch: function () {
+            this.add(Ext.create('Ext.form.Panel', {
+                width: '100%',
+                height: 120,
+                bodyPadding: 10,
+                title: 'Count down to ' + this.getSetting('Event name'),
+                items: [{
+                    xtype: 'displayfield',
+                    fieldLabel: 'Remaining',
+                    name: 'timeleft',
+                    value: 'Loading...'
+                }]
+            }));
+
+            this._loadData();
+        },
+        
+        _loadData: function() {
+            var app = Rally.getApp();
+            app.endDate = new Date(app.getSetting('End date'));
+            try { 
+                var twentyfourhourtime = app.getSetting('Event start time (24 hour time, e.g. 12:00)').split(':');
+                app.endDate.setHours(parseInt(twentyfourhourtime[0]));
+                app.endDate.setMinutes(parseInt(twentyfourhourtime[1]));
+            } catch (e) {
+                console.log("unable to get event start time");
+            }
+            app.interval = window.setInterval(function() {
+                amount = app.endDate.getTime() - ((new Date()).getTime()); 
+                if (amount > 0) { 
+                    app._write(app.format(app.math(amount)));
+                } else {
+                    //console.log("times up: " + app.endDate);
+                    app._write("Time's up");
+                    app._stop();
+                } 
+            }, 1000);
+        },
+
+        _write: function(formattedValue) {
+            var app = Rally.getApp();
+            var label = app.down('panel').items.findBy(function(i) { return i.name == 'timeleft' });
+            if (label) {
+                label.setValue(formattedValue);
+            }
+            //console.log("updated: " + formattedValue); 
+        },
+
+        format: function(r){
+            var out="";
+            if(r.d != 0){out += r.d +" "+((r.d==1)?"day":"days")+", ";}
+            if(r.h != 0){out += r.h +" "+((r.h==1)?"hour":"hours")+", ";}
+            out += r.m +" "+((r.m==1)?"min":"mins")+", ";
+            out += r.s +" "+((r.s==1)?"sec":"secs")+", ";
+            return out.substr(0,out.length-2);
+        },
+
+        math: function(work){
+            var	y=w=d=h=m=s=ms=0;
+            ms=(""+((work%1000)+1000)).substr(1,3);
+            work=Math.floor(work/1000);//kill the "milliseconds" so just secs
+            y=Math.floor(work/31536000);//years (no leapyear support)
+            w=Math.floor(work/604800);//weeks
+            d=Math.floor(work/86400);//days
+            work=work%86400;
+            h=Math.floor(work/3600);//hours
+            work=work%3600;
+            m=Math.floor(work/60);//minutes
+            work=work%60;
+            s=Math.floor(work);//seconds
+            return {y:y,w:w,d:d,h:h,m:m,s:s,ms:ms};
+        },
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('CountdownApp', {
+            name: 'Countdown App'
+        });
+
+        // ensure only small 
+        var frames = window.top.document.getElementsByTagName("iframe");
+        for(i = 0; i < frames.length; i++) {
+            if (frames[i].src == document.location.href) {
+                frames[i].parentNode.parentNode.parentNode.style.height = "100%";
+            }
+        }
+    });
+
+</script>
