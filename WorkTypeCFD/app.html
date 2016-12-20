@@ -130,7 +130,23 @@
             this._loadData();
         },
 
+        _updateButtonText: function (isLoading) {
+            var button = Rally.getApp().down('button');
+            if (!button) {
+                return;
+            }
+            if (isLoading) {
+                button.handler = function () { };
+                button.setText("Loading...");
+            } else {
+                button.handler = Rally.getApp()._buttonClick;
+                button.setText("Information");
+            }
+        },
+
         _loadData: function () {
+
+            Rally.getApp()._updateButtonText(true);
 
             this.fieldName = this.getSetting('Field');
 
@@ -160,14 +176,15 @@
                                 chartConfig: this._getChartConfig(),
                                 updateAfterRender: function () {
                                     var hc = Rally.getApp().chart.down('highchart');
-                                    if (!hc) {
-                                        return;
+                                    if (hc) {
+                                        var defaultValue = Rally.getApp().defaultValue;
+                                        var defaultSeries = hc.series.find(function (a) { return a.name === defaultValue; });
+                                        if (defaultSeries && defaultSeries.visible) {
+                                            defaultSeries.visible = false;
+                                        }
                                     }
-                                    var defaultValue = Rally.getApp().defaultValue;
-                                    var defaultSeries = hc.series.find(function (a) { return a.name === defaultValue; });
-                                    if (defaultSeries && defaultSeries.visible) {
-                                        defaultSeries.visible = false;
-                                    }
+
+                                    Rally.getApp()._updateButtonText(false);
                                 }
                             });
 
@@ -200,6 +217,8 @@
                     _ValidFrom: 1
                 },
                 context: this.getContext().getDataContext(),
+		compress: true, 
+		removeUnauthorizedSnapshots: true,
                 limit: Infinity
             };
         },
