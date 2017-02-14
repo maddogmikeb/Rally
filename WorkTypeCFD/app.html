@@ -1,66 +1,131 @@
-<meta name="Name" content="App: WorkTypeChartApp" />
+<meta name="Name" content="App: CFD App" />
 <meta name="Version" content="2016.07.12" />
 <meta name="Vendor" content="maddogmikeb" />
 
 <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
 
 <script type="text/javascript">
+(function() {
+	var Ext = window.Ext4 || window.Ext;
 
-    Ext.define('SizeCalculator', {
-        extend: 'Rally.data.lookback.calculator.TimeSeriesCalculator',
-        constructor: function (config) {
-            this.initConfig(config);
-            this.callParent(arguments);
-        },
-        prepareChartData: function (store) {
-            console.log("Loading data for WorkTypeChartApp (" + (store != undefined) + ")")
-            var that = this;
-            var snapshots = [];
-            Ext.each(store.data.items, function (record) {
-                var raw = record.data;
-                raw[this.stateFieldName] = Rally.getApp()._FixValue(raw[this.stateFieldName]);
-                snapshots.push(raw);
-            }, this);
-            return this.runCalculation(snapshots);
-        },
-        getMetrics: function () {
-            return _.map(this.stateFieldValues, function (stateFieldValue) {
-                return {
-                    as: stateFieldValue,
-                    groupByField: this.stateFieldName,
-                    allowedValues: [stateFieldValue],
-                    f: 'groupByCount',
-                    display: 'area'
-                };
-            }, this);
-        }
-    });
+    Date.daysBetween = function( date1, date2 ) {
+        var one_day=1000*60*60*24;
+        var date1_ms = date1.getTime();
+        var date2_ms = date2.getTime();
+        var difference_ms = date2_ms - date1_ms;
+        return Math.round(difference_ms/one_day); 
+    }
+    Date.prototype.addDays = function(days) {
+        var dat = new Date(this.valueOf());
+        dat.setTime(dat.getTime() + days * (1000*60*60*24));
+        return new Date(dat);
+    }
+    Date.prototype.toJSONLocal = function () {
+        var date = new Date(this.valueOf());
+        var local = new Date(this.valueOf());
+        local.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+        return local.toJSON().slice(0, 10);
+    }
 
     Ext.define('WorkTypeChartApp', {
         extend: 'Rally.app.App',
-        requires: [
-            'SizeCalculator'
-        ],
-        settingsScope: 'app',
-
+        settingsScope: 'project',
         startDate: null,
         endDate: null,
-
         defaultValue: 'Not Set',
         fieldName: null,
+        fieldReadableName: '',
         chart: null,
-
-        config: {
+        allowedValues: [],
+        
+		config: {
             defaultSettings: {
                 'Number of Weeks': 12,
-                'Field': 'c_WorkType'
+                'Field': 'ScheduleState'
             }
         },
-
-        _isNumeric: function (n) {
+		
+		_settingsSaved: function(settingFields) {
+			var app = Rally.getApp();
+			app.settings = settingFields;
+			return settingFields;
+		},
+				
+		showSettings: function(options) {
+			// shim	- after save event was not firing for some reason 
+			var origialSave = options.listeners.save;			
+			options.listeners.save = function(arg1, arg2, arg3) {				
+				arg1 = Rally.getApp()._settingsSaved(arg1);
+				origialSave.apply(this, arguments);
+			};			
+			return this.callParent(arguments);
+		},
+		
+		getSettingsFields: function() {
+			return [
+			{
+				name: 'Number of Weeks',
+				xtype: 'numberfield',
+				fieldLabel: 'Number of Weeks'
+			},  
+            {
+                name: 'ChartType',
+                xtype: 'rallycombobox',
+                storeConfig: {
+                    fields: ['value', 'display'],
+                    data: [
+                        {'value':'percent', 'display':'Percentage'},
+                        {'value':'count', 'display':'Count'},
+                    ]
+                },
+                storeType: 'Ext.data.Store',
+                fieldLabel: 'Chart type',
+                displayField: 'display',
+                valueField: 'value'
+            },
+			{
+				name: 'Field',
+				xtype: 'rallyfieldcombobox',
+				model: 'UserStory',
+				fieldLabel: 'Group By Field',
+				readyEvent: 'ready', //event fired to signify readiness
+				listeners: {
+                        ready: function(list, eOpts) {
+							var list = list;							
+							list.select(Rally.getApp().getSetting("Field"));							
+							var model = Rally.data.ModelFactory.getModel({
+								type: 'UserStory',
+								scope: this,
+								success: function (model) {									
+									list.select(Rally.getApp().getSetting("Field"));								
+									Ext.each(list.store.data.items, function(item) {								
+										var item = item;
+										if (!item || !item.data) return;
+										var valueStore = model.getField(item.data.value).getAllowedValueStore();
+										if (!valueStore) {
+											list.store.remove(item);
+											return; 
+										}
+										valueStore.load({
+											scope: this,
+											callback: function (records, operation, success) {
+												if (!success || records.length === 0) {
+													list.store.remove(item);
+												}
+											}
+										});
+									}, this);
+								}
+							});
+                        }
+                    }
+			}];
+		},
+        
+		_isNumeric: function (n) {
             return !isNaN(parseFloat(n)) && isFinite(n);
         },
-
+		
         _getSunday: function (d) {
             var date = new Date(d);
             var day = date.getDay() || 7;
@@ -70,21 +135,24 @@
             date.setHours(0, 0, 0, 0); // set to midnight
             return date;
         },
-
-        _FixValue: function (value) {
+        
+		_FixValue: function (value) {
             var defaultValue = Rally.getApp().defaultValue;
             if (!value || value === "" || value === null) {
                 value = defaultValue;
             };
-            if (value.indexOf('(') > 0) {
-                value = value.substring(0, value.indexOf('('));
+            if (value) {
+                value = value.toString();
+                if (value.indexOf('(') > 0) {
+                    value = value.substring(0, value.indexOf('('));
+                }
+                return value.trim();
             }
-            return value;
+            return "";
         },
-
+		
         _buttonClick: function (e) {
             var app = Rally.getApp();
-
             Ext.create('Rally.ui.dialog.Dialog', {
                 autoShow: true,
                 draggable: true,
@@ -93,7 +161,7 @@
                 title: 'Information',
                 items: {
                     xtype: 'component',
-                    html: '<div>Cumlative flow of work types over the past 12 weeks.</div>',
+                    html: '<div>Cumulative flow.</div>',
                     padding: 10
                 },
                 listeners: {
@@ -103,17 +171,16 @@
                 }
             });
         },
-
-        refresh: function () {
+        
+		refresh: function () {
             var app = Rally.getApp();
             app.chart.destroy();
             app._loadData();
         },
-
+		
         launch: function () {
             this.startDate = Rally.util.DateTime.add(this._getSunday(new Date()), "day", (0 - parseInt(this.getSetting('Number of Weeks'))) * 7);
             this.endDate = this._getSunday(new Date());
-
             var button = Ext.create('Rally.ui.Button', {
                 text: 'Information',
                 handler: this._buttonClick,
@@ -124,37 +191,122 @@
                     'z-index': 199
                 }
             });
-
             this.add(button);
-
             this._loadData();
         },
 
-        _updateButtonText: function (isLoading) {
-            var button = Rally.getApp().down('button');
-            if (!button) {
-                return;
+        _updateChart: function (store, records, success) {        
+            var app = Rally.getApp();            
+            console.log("Loading data for WorkTypeChartApp app (" + success + ")");            
+            if (!success) return;
+            
+            var data = {};
+
+            var defaultValue;
+            if (!app.valuesModelFieldIsRequired) {
+                defaultValue = "Not Set";
+            } else if (app.allowedValues.length > 0) {
+                defaultValue = app.allowedValues[0];
             }
-            if (isLoading) {
-                button.handler = function () { };
-                button.setText("Loading...");
-            } else {
-                button.handler = Rally.getApp()._buttonClick;
-                button.setText("Information");
-            }
+
+            data[defaultValue] = [[app.startDate.getTime(), 0]];
+            Ext.each(app.allowedValues, function (name) {
+                if (!data[name]) {
+                    data[name] = [[app.startDate.getTime(), 0]];
+                }
+            }, this);
+
+            app._showMask('Cleansing values...');
+
+            Ext.each(records, function (record) {
+                var item = record.raw;
+                var name = app._FixValue(item[app.fieldName] || defaultValue);
+                var itemValidFromDate = new Date(item._ValidFrom);
+                if (itemValidFromDate < app.startDate) {
+                    itemValidFromDate = app.startDate;
+                }
+                var itemValidToDate = new Date(item._ValidTo);  
+                if (itemValidToDate > app.endDate) {
+                    itemValidToDate = app.endDate;
+                }
+                var daysBetween = Date.daysBetween(itemValidFromDate, itemValidToDate);
+                if (daysBetween >= 1) {
+                    if (data[name]) {
+                        data[name].push([itemValidFromDate.getTime(), 1, {'FormattedID': item['FormattedID'], 'ObjectID': item['ObjectID'], 'Name': item['Name'] }]);                    
+                        for (i = 1; i < daysBetween; i++) {
+                            var date = itemValidFromDate.addDays(i);
+                            data[name].push([date.getTime(), 1, {'FormattedID': item['FormattedID'], 'ObjectID': item['ObjectID'], 'Name': item['Name'] }]);
+                        }
+                        //data[name].push([itemValidToDate.getTime() - 1, 1, {'FormattedID': item['FormattedID'], 'ObjectID': item['ObjectID'], 'Name': item['Name'] }]); // just before the next event
+                    } 
+                }
+            }, this);
+
+            //console.log(data);
+            app._showMask('Optimizing values...');
+           
+            var totalDays = Date.daysBetween(app.startDate, app.endDate);
+            var newData = {};
+            Ext.each(app.allowedValues, function (name) {
+                newData[name] = [];
+                for (j = 0; j < totalDays; j++) {
+                    var date = app.startDate.addDays(j);
+                    var day = date.getDay();
+                    var isWeekend = (day == 6) || (day == 0);
+                    if (!isWeekend) {
+                        var start = date.getTime();
+                        var end = start + (1000*60*60*24);
+                        var sum = 0;
+                        var objects = [];
+                        for (i = 0; i < data[name].length + 1; i++) {
+                            var value = data[name][i];
+                            if (value) {
+                                if (value[0] > start && value[0] <= end) { 
+                                    sum += value[1];
+                                    objects.push(value[2]);
+                                    data[name][i] = null;
+                                }
+                            }
+                        }                    
+                        newData[name].push({ x: start, y: sum, extra: objects });
+                    }
+                }
+                newData[name].sort(function(a, b) {
+                    return parseFloat(a.x) - parseFloat(b.x);
+                });
+                data[name] = undefined;
+            }, this);
+            
+            //console.log(newData);
+
+            app._showMask('Updating chart...');
+
+            var hc = app.chart.down('highchart').chart;
+            if (!hc) return;
+
+            Ext.each(app.allowedValues, function (name) {
+                var series = hc.series.find(function (a) { return a.name === name; });
+                series.setData(newData[name]);
+            }, this);
+            
+            hc.redraw();
+
+            app._hideMask();
         },
-
+		
         _loadData: function () {
-
-            Rally.getApp()._updateButtonText(true);
-
+            this._showMask('Loading Model...');
             this.fieldName = this.getSetting('Field');
-
-            var model = Rally.data.ModelFactory.getModel({
+		    var model = Rally.data.ModelFactory.getModel({
                 type: 'UserStory',
                 scope: this,
                 success: function (model) {
-                    model.getField(this.fieldName).getAllowedValueStore().load({
+                    var app = Rally.getApp();
+                    this._showMask('Loading Field Values...');
+                    var m = model.getField(this.fieldName);
+                    app.fieldReadableName = m.displayName;
+                    app.valuesModelFieldIsRequired = m.required;
+                    m.getAllowedValueStore().load({
                         scope: this,
                         callback: function (records, operation, success) {
                             var allowedValues = [];
@@ -162,47 +314,122 @@
                                 var value = this._FixValue(allowedValue.get('StringValue'));
                                 allowedValues.push(value);
                             }, this);
+                            this.allowedValues = allowedValues; 
+
+                            var categories = [];
+                            var totalDays = Date.daysBetween(this.startDate, this.endDate);
+                            for (i = 0; i < totalDays; i++) {
+                                var date = this.startDate.addDays(i);
+                                var day = date.getDay();
+                                var isWeekend = (day == 6) || (day == 0);
+                                if (!isWeekend) {
+                                    categories.push(date);
+                                }
+                            }
+                            this.AllCategories = categories;
+                            
+                            var j = 0;
+                            var series = [];
+	                        Ext.each(this.allowedValues, function (name) {
+                                series.push({ 
+                                    name: name, 
+                                    index: j++, 
+                                    events: {
+                                        click: app._chartClickHandler             
+                                    }, 
+                                });
+                            });                            
+
+                            this._showMask('Creating chart...');
 
                             this.chart = Ext.create('Rally.ui.chart.Chart', {
-                                storeType: 'Rally.data.lookback.SnapshotStore',
-                                storeConfig: this._getStoreConfig(),
-                                calculatorType: 'SizeCalculator',
-                                calculatorConfig: {
-                                    stateFieldName: this.fieldName,
-                                    stateFieldValues: allowedValues,
-                                    granularity: 'week',
-                                    tz: "Australia/Brisbane"
+                            	chartConfig: this._getChartConfig(),
+                                chartData: {
+                                    categories: categories,
+                                    series: series
                                 },
-                                chartConfig: this._getChartConfig(),
-                                updateAfterRender: function () {
-                                    var hc = Rally.getApp().chart.down('highchart');
-                                    if (hc) {
-                                        var defaultValue = Rally.getApp().defaultValue;
-                                        var defaultSeries = hc.series.find(function (a) { return a.name === defaultValue; });
-                                        if (defaultSeries && defaultSeries.visible) {
-                                            defaultSeries.visible = false;
-                                        }
-                                    }
-
-                                    Rally.getApp()._updateButtonText(false);
-                                }
                             });
-
                             this.add(this.chart);
+
+                            this._loadStoreWithHack(Ext.create('Rally.data.lookback.SnapshotStore', {
+                                compress: true,
+                                removeUnauthorizedSnapshots: true,
+                                config: {                      
+                                    limit: 'Infinity',                         
+                                    removeUnauthorizedSnapshots: true,
+                                    compress: true,            
+                                    context: this.getContext(),                        
+                                    filters: [
+                                        {
+                                            property: '_ValidFrom',
+                                            operator: '>',
+                                            value: this.startDate.toISOString()
+                                        },
+                                        {
+                                            property: '_ValidFrom',
+                                            operator: '<=',
+                                            value: 'current' // this.endDate.toISOString()
+                                        },                                         
+                                        {
+                                            property: '_TypeHierarchy', 
+                                            operator: '=',
+                                            value: 'HierarchicalRequirement'
+                                        },
+                                        { 
+                                            property: '_ProjectHierarchy',
+                                            operator: '=', 
+                                            value: this.getContext().getProject().OID
+                                        }, 
+                                        /*{
+                                            property: 'FormattedID', 
+                                            operator: '=', 
+                                            value: 'US27440'
+                                        }*/
+                                    ]
+                                },
+                                listeners: {
+                                    load: this._updateChart
+                                },                                
+                            }));                             
                         }
                     });
                 }
             });
         },
 
+        _loadStoreWithHack: function(store) {
+            setTimeout(function() {
+                var app = Rally.getApp();             
+                // HACK - fetch fields not coming through config 
+                store.model = null;
+                store.compress = true;
+                store.removeUnauthorizedSnapshots = true;
+                store.fetch.push(app.fieldName);
+                store.fetch.push("FormattedID");
+                store.fetch.push("Name");
+                store.hydrate.push(app.fieldName);
+                store.context = app.getContext();
+                store._setModel();
+                // Shim 
+                store._shouldLoadMorePages = function(operation) {  
+                    var page = operation.page;
+                    var total = Math.min(this.limit, this.getTotalCount());
+                    var totalPages = Math.ceil(total / this.pageSize);
+                    var app = Rally.getApp(); 
+                    app._showMask("Loading " + page + " of " + totalPages + "..."); 
+                    return totalPages > page;
+                };                        
+
+                app._showMask('Loading Model Values...');            
+                store.load();
+            }, 1) ;
+        },
+		
         _dateToYMD: function (date) {
-            var d = date.getDate();
-            var m = date.getMonth() + 1;
-            var y = date.getFullYear();
-            //return y + '-' + (m <= 9 ? '0' + m : m) + '-' + (d <= 9 ? '0' + d : d);
+            var d = date.getDate(), m = date.getMonth() + 1, y = date.getFullYear();
             return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m);
         },
-
+		
         _getStoreConfig: function () {
             return {
                 find: {
@@ -217,62 +444,143 @@
                     _ValidFrom: 1
                 },
                 context: this.getContext().getDataContext(),
-		compress: true, 
-		removeUnauthorizedSnapshots: true,
                 limit: Infinity
             };
         },
-
+		
         _getChartConfig: function () {
+            var app = Rally.getApp(); 
             return {
                 chart: {
+                    type: 'area',
                     zoomType: 'xy'
                 },
                 title: {
-                    text: 'Work Type Cumulative Flow'
+                    text: 'Cumulative Flow Diagram'
                 },
-                subtitle: {
-                    text: '<div style="font-size: 12px;">A reducing defect area is generally better.</div>',
-                    useHTML: true
-                },
+				subtitle: {
+					text: app.fieldReadableName + " over the past " + app.getSetting("Number of Weeks") + " weeks"
+				},
                 xAxis: {
-                    tickmarkPlacement: 'on',
-                    tickInterval: 7,
+                    tickInterval: 7 * 1000 * 60 * 60 * 24,
+                    type: 'datetime',
                     title: {
                         text: 'Date'
                     },
-
                     labels: {
                         formatter: function () {
-                            return Rally.getApp()._dateToYMD(new Date(this.value));
+                            return app._dateToYMD(new Date(this.value));
                         }
                     }
                 },
                 yAxis: [
                     {
                         title: {
-                            text: 'Count'
+                            text: (app.getSetting("ChartType") === 'percent' ? '%' : 'Count')
                         }
                     }
                 ],
+                tooltip: {
+                    formatter: function () {
+                        return new Date(this.x).toJSONLocal() + "<br/><b>" + this.series.name + ": " + this.y + "</b>";
+                    }
+                },
+
+                events: {
+                    click: function () {
+                        alert('You just clicked the graph');
+                    }
+                },
+
                 plotOptions: {
                     series: {
-                        marker: {
-                            enabled: false
-                        }
+                        cursor: 'pointer',
                     },
                     area: {
-                        stacking: 'normal'
+                        stacking: (app.getSetting("ChartType") === 'percent' ? 'percent' : 'normal')
+                    }
+                }                
+            };            
+        },
+
+        _chartClickHandler: function (e) {           
+            var extra = e.point.extra;
+
+            var data = [];
+            Ext.each(extra, function (rec) {
+                data.push({
+                    'Item': rec, 
+                    'Name' : rec['Name']
+                });
+            });
+
+            var container = Ext.create('Rally.ui.grid.Grid', {
+                title: 'Items',
+                width: '100%',
+                frame: true,
+                store: Ext.create('Rally.data.custom.Store', {
+                    data: data,
+                    pageSize: 10
+                }),
+                pagingToolbarCfg: {
+                    pageSizes: [5, 10, 25]
+                },
+                columnCfgs: [
+                    {
+                        text: 'Item',
+                        dataIndex: 'Item',
+                        renderer: function (rec) {
+                            var link = "/#/detail/userstory/" + rec['ObjectID'];
+                            return Ext.String.format('<a target="_blank" href="{0}">{1}</a>', link, rec['FormattedID']);
+                        }
+                    },
+                    {                
+                        text: 'Name',
+                        dataIndex: 'Name',
+                        width: '100%'
+                    },
+                ], 
+                columnWidth: '100%' 
+            });
+            Ext.create('Rally.ui.dialog.Dialog', {
+                autoShow: true,
+                draggable: true,
+                closable: true,
+                resizable: true,
+                width: "460px",
+                style: {
+                    'min-width': "460px",
+                },
+                title: 'Items',
+                items: [container],
+                listeners: {
+                    close: function (e, o) {
+                        var app = Rally.getApp();
+                        //app.refresh();
                     }
                 }
-            };
-        }
-    });
+            });
+        },
 
+		_showMask: function (msg) {
+            var app = Rally.getApp();
+			if (app.getEl()) {
+				app.getEl().unmask();
+				app.getEl().mask(msg);
+			}
+		},
+
+		_hideMask: function () {
+            var app = Rally.getApp();
+			app.getEl().unmask();
+		}
+    });
+	
     Rally.onReady(function () {
         Rally.launchApp('WorkTypeChartApp', {
-            name: 'Work Type Chart App'
+            name: 'CFD App'
         });
     });
-
+	
+})();
 </script>
