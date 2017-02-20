@@ -11,27 +11,26 @@
     Ext.define('WarningApp', {
         extend: 'Rally.app.App',
 
+        timeout: 10 * 1000,
+
         _showWarning: function() { 
             Rally.ui.notify.Notifier.showWarning({
                 message: 'Please <b>do not change</b> settings on this page as it is a global page. If you wish to make adjustments please copy the page - however any updates to apps may not flow through to your new page.',
-                timeout: 10000
+                timeout: this.timeout
             }); 
         },
 
         launch: function() {
-            var button = Ext.create('Rally.ui.Button', {
+            this.add(Ext.create('Rally.ui.Button', {
                 text: 'Show Warning',
-                handler: function() {
-                    Rally.getApp()._showWarning();
-                }, 
+                handler: this._showWarning,
                 style: {
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     'z-index': 199
                 }
-            });
-            this.add(button);
+            }));
             this._showWarning();
         }
     });
