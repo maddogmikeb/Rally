@@ -1,0 +1,47 @@
+<meta name="Name" content="App: WarningApp" />
+<meta name="Version" content="2017.02.20" />
+<meta name="Vendor" content="maddogmikeb" />
+
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+<script type="text/javascript">
+(function() {
+
+    var Ext = window.Ext4 || window.Ext;
+
+    Ext.define('WarningApp', {
+        extend: 'Rally.app.App',
+
+        _showWarning: function() { 
+            Rally.ui.notify.Notifier.showWarning({
+                message: 'Please <b>do not change</b> settings on this page as it is a global page. If you wish to make adjustments please copy the page - however any updates to apps may not flow through to your new page.',
+                timeout: 10000
+            }); 
+        },
+
+        launch: function() {
+            var button = Ext.create('Rally.ui.Button', {
+                text: 'Show Warning',
+                handler: function() {
+                    Rally.getApp()._showWarning();
+                }, 
+                style: {
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    'z-index': 199
+                }
+            });
+            this.add(button);
+            this._showWarning();
+        }
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('WarningApp', {
+            name: 'Warning App'
+        });
+    });
+
+})();
+
+</script>
