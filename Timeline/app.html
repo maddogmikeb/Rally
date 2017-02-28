@@ -1,0 +1,1304 @@
+<meta name="Name" content="App: Portfolio Timeline Extended v2" />
+<meta name="Version" content="2017.02.14" />
+<meta name="Vendor" content="MaddogMikeB" />
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+<script type="text/javascript">
+    (function () {
+
+        var Ext = window.Ext4 || window.Ext;
+
+        Rally.ui.chart.Chart.prototype._renderChart = function () {
+            this._unmask();
+
+            var chartConfig = this.getChartConfig(),
+                chartEl = this.down('#chart');
+
+            if (chartEl) {
+                chartConfig.xAxis = chartConfig.xAxis || {};
+                chartConfig.xAxis.categories = this.chartData.categories;
+
+                this._setChartColorsOnSeries(this.chartData.series);
+
+                var me = this;
+                var highChartConfig = {
+                    xtype: 'highchart',
+                    chartConfig: chartConfig,
+                    series: this.chartData.series,
+                    initAnimAfterLoad: false,
+                    afterChartRendered: function (chart) {
+                        try {
+                            if (chart.chartHeight > me.getHeight()) {
+                                me.setHeight(chart.chartHeight);
+                            }
+                        } catch (e) {}
+                        // hack to get the chart early 
+                        me.down('highchart').chart = chart;
+                        me._setChartReady();
+                        me.fireEvent('chartRendered', me);
+                    }
+                };
+
+                chartEl.add(highChartConfig);
+            }
+        };
+
+        function extendHighchartsScatter(H) {
+            var scatterType = H.seriesTypes.scatter;
+            H.seriesTypes.scatter = H.extendClass(H.seriesTypes.scatter, {
+                translate: function () {
+                    var series = this;
+                    scatterType.prototype.translate.call(this, arguments);
+                    H.each(series.points, function (point) {
+                        // Make milestones sit at the top of the chart 
+                        point.plotY = 0;
+                    }, this);
+                },
+                getColumnMetrics: function () {
+                    return scatterType.prototype.getColumnMetrics.call(this);
+                }
+            });
+        }
+
+        /** 
+         *   Taken from http://jsfiddle.net/gh/get/jquery/3.1.1/highcharts/highcharts/tree/samples/highcharts/studies/xrange-series/ 
+         */
+        function extendHighchartsWithXRangePlugin(H) {
+            var defaultPlotOptions = H.getOptions().plotOptions,
+                columnType = H.seriesTypes.column,
+                each = H.each,
+                extendClass = H.extendClass,
+                pick = H.pick,
+                Point = H.Point,
+                Series = H.Series;
+
+            defaultPlotOptions.xrange = H.merge(defaultPlotOptions.column, {
+                tooltip: {
+                    pointFormat: '<span style="color:{point.color}">\u25CF</span> {series.name}: <b>{point.yCategory}</b><br/>'
+                }
+            });
+
+            H.seriesTypes.column = H.extendClass(columnType, {
+                pointClass: extendClass(Point, {
+                    getLabelConfig: function () {
+                        var cfg = Point.prototype.getLabelConfig.call(this);
+                        cfg.x2 = this.x2;
+                        cfg.yCategory = this.yCategory = this.series.yAxis.categories &&
+                            this.series.yAxis.categories[this.y];
+                        return cfg;
+                    }
+                }),
+                type: 'xrange',
+                forceDL: true,
+                parallelArrays: ['x', 'x2', 'y'],
+                requireSorting: false,
+                animate: H.seriesTypes.line.prototype.animate,
+
+                getColumnMetrics: function () {
+                    var metrics, chart = this.chart;
+
+                    function swapAxes() {
+                        each(chart.series, function (s) {
+                            var xAxis = s.xAxis;
+                            s.xAxis = s.yAxis;
+                            s.yAxis = xAxis;
+                        });
+                    }
+                    swapAxes();
+                    this.yAxis.closestPointRange = 1;
+                    metrics = columnType.prototype.getColumnMetrics.call(this);
+                    swapAxes();
+                    return metrics;
+                },
+
+                cropData: function (xData, yData, min, max) {
+                    var crop = Series.prototype.cropData.call(this, this.x2Data, yData, min, max);
+                    crop.xData = xData.slice(crop.start, crop.end);
+                    return crop;
+                },
+
+                translate: function () {
+                    columnType.prototype.translate.apply(this, arguments);
+                    var series = this,
+                        xAxis = series.xAxis,
+                        metrics = series.columnMetrics,
+                        minPointLength = series.options.minPointLength || 0;
+
+                    H.each(series.points, function (point) {
+                        var plotX = point.plotX,
+                            plotX2 = xAxis.toPixels(H.pick(point.x2, point.x + (point.len || 0)),
+                                true),
+                            width = plotX2 - plotX,
+                            widthDifference;
+
+                        if (minPointLength) {
+                            widthDifference = width < minPointLength ? minPointLength - width :
+                                minPointLength;
+                            plotX -= widthDifference / 2;
+                            plotX2 += widthDifference / 2;
+                        }
+
+                        plotX = Math.max(plotX, -minPointLength);
+                        plotX2 = Math.min(Math.max(plotX2, -minPointLength), xAxis.len +
+                            minPointLength);
+
+                        var height = point.height || metrics.width;
+                        // var offset = point.plotY + ((point.series.chart.chartHeight / point.series
+                        //    .chart.series.length) / -2) + ((metrics.width - (point.height ||
+                        //    metrics.width)) / 2);
+
+                        var y = point.plotY - (height / 2);
+                        if (isNaN(y)) {
+                            debugger;
+                        }
+                        if (isNaN(plotX)) {
+                            debugger;
+                        }
+
+                        point.shapeArgs = {
+                            x: plotX,
+                            y: y, //offset,
+                            width: plotX2 - plotX,
+                            height: height
+                        };
+                        if (!point.tooltipPos) {
+                            point.tooltipPos = [];
+                        }
+                        point.tooltipPos[0] += width / 2;
+                        point.tooltipPos[1] -= metrics.width / 2;
+                    }, this);
+                }
+            });
+
+            H.wrap(H.Axis.prototype, 'getSeriesExtremes', function (proceed) {
+                var axis = this,
+                    dataMax, modMax;
+                proceed.call(this);
+                if (this.isXAxis) {
+                    dataMax = pick(axis.dataMax, Number.MIN_VALUE);
+                    each(this.series, function (series) {
+                        each(series.x2Data || [], function (val) {
+                            if (val > dataMax) {
+                                dataMax = val;
+                                modMax = true;
+                            }
+                        });
+                    });
+                    if (modMax) {
+                        axis.dataMax = dataMax;
+                    }
+                }
+            });
+        }
+
+        function extendHighchartsTooltip(H) {
+            var render = H.Tick.prototype.render;
+            H.Tick.prototype.render = function () {
+                render.apply(this, arguments);
+                if (this.axis.options.labels.enabled &&
+                    this.axis.options.labels.events &&
+                    this.axis.options.labels.events.click) {
+                    var series = Ext.Array.filter(this.axis.series, function (seri) {
+                        return this.label && (seri.name === this.label.text);
+                    }, this);
+                    if (series && series.length > 0) series = series[0];
+                    if (this.label) {
+                        this.label.on('click', (function () {
+                            this.options.labels.events.click.apply(this, arguments);
+                        }).bind(this.axis, this.label, series));
+                    }
+                }
+            };
+
+            H.Chart.prototype.showCustomTooltip = function (options) {
+                var tt = this.tooltip;
+                tt.isHidden = false;
+                tt.hide();
+                tt.label.attr({
+                    text: options.text,
+                    stroke: options.borderColor
+                });
+                tt.label.attr("opacity", 1);
+                tt.label.show();
+                var position = this.options.tooltip.positioner.apply(this);
+                tt.updatePosition({
+                    plotX: position.x,
+                    plotY: position.y
+                });
+                if (window.HighchartsAdapter) {
+                    window.HighchartsAdapter.fireEvent(this, "tooltipRefresh", {
+                        text: options.text,
+                        x: position.x + this.plotLeft,
+                        y: position.y + this.plotTop,
+                        borderColor: options.borderColor
+                    });
+                }
+            };
+        }
+
+        function extendHighchartsExport(HC) {
+            HC.getSVG = function (charts, options) {
+                var svgArr = [],
+                    top = 0,
+                    width = 0;
+                HC.each(charts, function (chart) {
+                    var svg = chart.container.children[0].outerHTML || chart.getSVG(options);
+                    svg = svg.replace('<svg', '<g transform="translate(0,' + top + ')" ');
+                    svg = svg.replace('</svg>', '</g>');
+                    top += chart.chartHeight;
+                    width = Math.max(width, chart.chartWidth);
+                    svgArr.push(svg);
+                });
+                return '<svg height="' + top + '" width="' + width +
+                    '" version="1.1" xmlns="http://www.w3.org/2000/svg">' +
+                    svgArr.join('') + '</svg>';
+            };
+
+            HC.exportCharts = function (charts, options) {
+                options = HC.merge(HC.getOptions().exporting, options);
+                options.url = options.url.replace(/^http:\/\//i, location.protocol + '//');
+                HC.post(options.url, {
+                    filename: options.filename || 'chart',
+                    type: options.type,
+                    width: options.width,
+                    svg: HC.getSVG(charts)
+                });
+            };
+
+            HC.post = function (url, data, formAttributes) {
+                var name;
+                var f = window.document.createElement('form');
+                f.setAttribute('method', 'post');
+                f.setAttribute('action', url);
+                f.setAttribute('enctype', 'multipart/form-data');
+                f.setAttribute('style', 'display: none;');
+
+                for (att in formAttributes) {
+                    f.setAttribute(attr, formAttributes[attr]);
+                }
+
+                for (name in data) {
+                    var input = window.document.createElement('input');
+                    input.setAttribute('type', 'hidden');
+                    input.setAttribute('name', name);
+                    input.setAttribute('value', data[name]);
+                    f.appendChild(input);
+                }
+
+                window.document.getElementsByTagName('body')[0].appendChild(f);
+
+                f.submit();
+                f.remove();
+            };
+
+        }
+
+        Element.prototype.remove = function () {
+            this.parentElement.removeChild(this);
+        }
+
+        NodeList.prototype.remove = HTMLCollection.prototype.remove = function () {
+            for (var i = this.length - 1; i >= 0; i--) {
+                if (this[i] && this[i].parentElement) {
+                    this[i].parentElement.removeChild(this[i]);
+                }
+            }
+        }
+
+        Rally.ExtendHighcharts = function (HC) {
+            extendHighchartsWithXRangePlugin(HC);
+            extendHighchartsScatter(HC);
+            extendHighchartsTooltip(HC);
+            extendHighchartsExport(HC);
+        }
+
+    })();
+</script>
+<script type="text/javascript">
+    (function () {
+
+        var Ext = window.Ext4 || window.Ext;
+
+        Ext.define('DataLoader', {
+
+            _buildQueryFilter: function (model, settingName) {
+                var queries = [];
+                try {
+                    var setting = this.getSetting(settingName);
+                    if (!setting && this.getSettings().query) {
+                        var fieldIndex = Ext.Array.map(Ext.Array.filter(this.getSettingsFields(),
+                            function (v) {
+                                return v.type === 'query';
+                            }), function (v) {
+                            return v.name;
+                        }).indexOf(settingName);
+                        setting = this.getSettings().query.split(",")[fieldIndex];
+                        this.settings[settingName] = setting;
+                    }
+                    if (setting) {
+                        setting = new Ext.Template(setting).apply({
+                            projectName: this.getContext().getProject().Name,
+                            projectOid: this.getContext().getProject().ObjectID,
+                            user: this.getContext().getUser()._ref
+                        });
+                        queries.push(Rally.data.QueryFilter.fromQueryString(setting));
+                        console.log([settingName, setting].concat(queries));
+                    }
+                } catch (e) {
+                    Rally.ui.notify.Notifier.showError({
+                        message: settingName + ': ' + e.message
+                    });
+                }
+                return queries;
+            },
+
+            _buildPortfolioItemQueryFilter: function (scope) {
+                return this._buildQueryFilter.apply(scope, [].concat(arguments, 'PortfolioItemFilter'));
+            },
+
+            _buildMilestoneQueryFilter: function (scope) {
+                return this._buildQueryFilter.apply(scope, [].concat(arguments, 'MilestoneFilter'));
+            },
+
+            _buildReleasesQueryFilter: function (scope) {
+                return this._buildQueryFilter.apply(scope, [].concat(arguments, 'ReleasesFilter'));
+            },
+
+            _buildIterationsQueryFilter: function (scope) {
+                return this._buildQueryFilter.apply(scope, [].concat(arguments, 'IterationsFilter'));
+            },
+
+            _buildPortfolioItemDependencyQueryFilter: function (scope, objectID, type) {
+                var q = '(' + type + '.ObjectID contains "' + objectID + '")';
+                return [Rally.data.QueryFilter.fromQueryString(q)];
+            },
+
+            LoadData: function (events) {
+                Deft.Promise.all(
+                    [
+                        this._getPortfolioItems(events.scope),
+                        this._getMilestoneItems(events.scope),
+                        this._getReleases(events.scope),
+                        this._getIterations(events.scope),
+                    ]
+                ).then({
+                    success: function () {
+                        if (events) {
+                            events.success.apply(events.scope || this, arguments);
+                        }
+                    },
+                    failure: function () {
+                        events.failure.apply(events.scope || this, arguments);
+                    },
+                    scope: events.scope
+                });
+            },
+
+            _getIterations: function (scope) {
+                var deferred = Ext.create('Deft.Deferred');
+
+                Ext.create('Rally.data.wsapi.Store', {
+                    model: 'Iteration',
+                    fetch: ['ObjectID', 'Project', 'Name',
+                        'Theme', 'StartDate', 'EndDate'
+                    ],
+                    context: scope.getContext().getDataContext(),
+                    limit: Infinity,
+                    filters: this._buildIterationsQueryFilter(scope)
+                }).load({
+                    callback: function (records, operation) {
+                        if (operation.wasSuccessful()) {
+                            deferred.resolve(records.length > 0 ? records : []);
+                        } else {
+                            deferred.reject(this.model.displayName + " - " + operation.error &&
+                                operation.error.errors ?
+                                operation.error.errors.join(',') : 'Uknown error');
+                        }
+                    }
+                });
+
+                return deferred.promise;
+            },
+
+            _getReleases: function (scope) {
+                var deferred = Ext.create('Deft.Deferred');
+
+                Ext.create('Rally.data.wsapi.Store', {
+                    model: 'Release',
+                    autoLoad: true,
+                    fetch: ['ObjectID', 'Project', 'Name', 'Theme',
+                        'ReleaseStartDate', 'ReleaseDate'
+                    ],
+                    context: scope.getContext().getDataContext(),
+                    limit: Infinity,
+                    filters: this._buildReleasesQueryFilter(scope)
+                }).load({
+                    callback: function (records, operation) {
+                        if (operation.wasSuccessful()) {
+                            deferred.resolve(records.length > 0 ? records : []);
+                        } else {
+                            deferred.reject(this.model.displayName + " - " + operation.error &&
+                                operation.error.errors ?
+                                operation.error.errors.join(',') : 'Uknown error');
+                        }
+                    }
+                });
+
+                return deferred.promise;
+            },
+
+            _getMilestoneItems: function (scope) {
+                var deferred = Ext.create('Deft.Deferred');
+
+                Ext.create('Rally.data.wsapi.Store', {
+                    model: 'Milestone',
+                    autoLoad: true,
+                    fetch: ['ObjectID', 'FormattedID', 'DisplayColor', 'Name',
+                        'Notes', 'TargetDate', 'TargetProject'
+                    ],
+                    context: scope.getContext().getDataContext(),
+                    limit: Infinity,
+                    filters: this._buildMilestoneQueryFilter(scope)
+                }).load({
+                    callback: function (records, operation) {
+                        if (operation.wasSuccessful()) {
+                            deferred.resolve(records.length > 0 ? records : []);
+                        } else {
+                            deferred.reject(this.model.displayName + " - " + operation.error &&
+                                operation.error.errors ?
+                                operation.error.errors.join(',') : 'Uknown error');
+                        }
+                    }
+                });
+
+                return deferred.promise;
+            },
+
+            _getPortfolioItems: function (scope) {
+                var deferred = Ext.create('Deft.Deferred');
+
+                var type = Rally.getApp().getSetting('Portfolio Item Type');
+                console.log(type);
+
+                Ext.create('Rally.data.wsapi.Store', {
+                    model: type,
+                    autoLoad: true,
+                    fetch: ['ObjectID', 'FormattedID', 'DisplayColor', 'Name',
+                        'Description', 'PlannedStartDate', 'PlannedEndDate',
+                        'ActualStartDate', 'ActualEndDate', 'CreationDate',
+                        'DragAndDropRank', 'State', 'Predecessors', 'Successors'
+                    ],
+                    context: scope.getContext().getDataContext(),
+                    limit: Infinity,
+                    filters: this._buildPortfolioItemQueryFilter(scope),
+                    sorters: [{
+                        property: 'DragAndDropRank',
+                        direction: 'DESC'
+                    }],
+                }).load({
+                    callback: function (records, operation) {
+                        if (operation.wasSuccessful()) {
+                            deferred.resolve(records.length > 0 ? records : []);
+                        } else {
+                            deferred.reject(this.model.displayName + " - " + operation.error &&
+                                operation.error.errors ?
+                                operation.error.errors.join(',') : 'Uknown error');
+                        }
+                    }
+                });
+
+                return deferred.promise;
+            },
+
+            GetDependencies: function (events) {
+                var items = events.config && events.config.items ? events.config.items : [];
+
+                var queries = [];
+                Ext.Array.forEach(items, function (i) {
+                    queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID,
+                        'Predecessors'));
+                    queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID,
+                        'Successors'));
+                }, this);
+
+                Deft.Promise.all(queries).then({
+                    success: function () {
+                        if (events) {
+                            events.success.apply(events.scope || this, arguments);
+                        }
+                    },
+                    failure: function () {
+                        events.failure.apply(events.scope || this, arguments);
+                    },
+                    scope: events.scope
+                });
+            },
+
+            _getPortfolioItemDependencies: function (scope, item, type) {
+                var deferred = Ext.create('Deft.Deferred');
+
+                Ext.create('Rally.data.wsapi.Store', {
+                    model: Rally.getApp().getSetting('Portfolio Item Type'),
+                    autoLoad: true,
+                    fetch: ['ObjectID', 'FormattedID', 'DisplayColor', 'Name',
+                        'Description', 'PlannedStartDate', 'PlannedEndDate',
+                        'ActualStartDate', 'ActualEndDate', 'CreationDate',
+                        'DragAndDropRank', 'State', 'Predecessors', 'Successors'
+                    ],
+                    context: scope.getContext().getDataContext(),
+                    limit: Infinity,
+                    filters: this._buildPortfolioItemDependencyQueryFilter(scope, item, type),
+                    sorters: [{
+                        property: 'DragAndDropRank',
+                        direction: 'DESC'
+                    }],
+                }).load({
+                    callback: function (records, operation) {
+                        if (operation.wasSuccessful()) {
+                            deferred.resolve({
+                                item: item,
+                                type: type,
+                                records: records.length > 0 ? records : []
+                            });
+                        } else {
+                            deferred.reject(this.model.displayName + " - " + operation.error &&
+                                operation.error.errors ?
+                                operation.error.errors.join(',') : 'Uknown error');
+                        }
+                    }
+                });
+
+                return deferred.promise;
+            },
+        });
+
+        Ext.define('MaskedApp', {
+            extend: 'Rally.app.App',
+
+            _showMask: function (msg) {
+                var app = Rally.getApp();
+                if (app.getEl()) {
+                    app.getEl().unmask();
+                    app.getEl().mask(msg);
+                }
+            },
+
+            _hideMask: function () {
+                var app = Rally.getApp();
+                app.getEl().unmask();
+            },
+        });
+
+        Ext.define('PortfolioTimelineExtendedApp', {
+            extend: 'MaskedApp',
+            settingsScope: 'project',
+            requires: ['DataLoader'],
+
+            chart: null,
+            dataLoader: null,
+
+            getOptions: function () {
+                return [{
+                    text: 'Export Chart',
+                    handler: this.exportChart,
+                    scope: this
+                }];
+            },
+
+            config: {
+                defaultSettings: {
+                    'Portfolio Item Type': 'PortfolioItem/Feature',
+                    'query': [
+                        "", // PortfolioItem
+                        "(TargetProject.ObjectID = {projectOid})", // Milestone
+                        "(Project.ObjectID = {projectOid})", // Release
+                        "(Project.ObjectID = {projectOid})" // Iteration
+                    ].join(','),
+                }
+            },
+
+            getSettingsFields: function () {
+                return [{
+                    xtype: 'rallycombobox',
+                    name: 'Portfolio Item Type',
+                    storeConfig: {
+                        fields: ['value', 'range'],
+                        data: [{
+                                'value': 'PortfolioItem/Feature',
+                                'range': 'Feature'
+                            }, {
+                                'value': 'PortfolioItem/Portfolio',
+                                'range': 'Portfolio'
+                            }
+                        ]
+                    },
+                    storeType: 'Ext.data.Store',
+                    fieldLabel: 'Portfolio Item Type',
+                    displayField: 'range',
+                    valueField: 'value'
+                }, {
+                    name: 'PortfolioItemFilter',
+                    config: {
+                        fieldLabel: 'Portfolio Item Filter',
+                    },
+                    type: 'query'
+                }, {
+                    name: 'MilestoneFilter',
+                    config: {
+                        fieldLabel: 'Milestone Filter',
+                    },
+                    type: 'query'
+                }, {
+                    name: 'ReleasesFilter',
+                    config: {
+                        fieldLabel: 'Release Filter',
+                    },
+                    type: 'query'
+                }, {
+                    name: 'IterationsFilter',
+                    config: {
+                        fieldLabel: 'Iteration Filter',
+                    },
+                    type: 'query'
+                }];
+            },
+
+            launch: function () {
+                this.dataLoader = Ext.create('DataLoader');
+                this._showMask("Loading...");
+                this._addButton.apply(this);
+                this._addChecks.apply(this);
+                this._loadData.apply(this);
+            },
+
+            _hideMask: function () {
+                this.callParent(arguments);
+                this.chart.getEl().unmask();
+            },
+
+            exportChart: function () {
+                if (!this.chart) return;
+
+                var chart = this.chart.down('highchart').chart;
+                if (!chart) return;
+
+                window.Highcharts.exportCharts([chart], {
+                    filename: encodeURIComponent(this.getContext().getProject().Name),
+                    type: 'image/png',
+                });
+
+                this._loadData.apply(this);
+            },
+
+            _updateChart: function (success, portfolioItems, milestones, timeboxes) {
+                if (!success) {
+                    Rally.ui.notify.Notifier.showError({
+                        message: 'Error'
+                    });
+                    return;
+                }
+
+                var plotBands = Ext.Array.unique(this._createPlotbandsFromTimeboxes(timeboxes));
+                var categories = Ext.Array.unique(Ext.Array.map(portfolioItems, this._categoryFormatter));
+                var seriesItems = this._createSeriesFromPortfolioItems(categories, portfolioItems);
+                var ms = Ext.Array.unique(this._createSeriesFromMilestones(milestones));
+
+                var series = [].concat(seriesItems, ms);
+                var chartConfig = this._chartConfig(plotBands, categories, series);
+
+                if (this.chart) this.chart.destroy();
+
+                this.chart = Ext.create('Rally.ui.chart.Chart', {
+                    chartConfig: chartConfig,
+                    chartData: {
+                        series: series
+                    },
+                    listeners: {
+                        afterrender: this._hideMask,
+                        chartRendered: function () {
+                            var releases = this.down("checkbox[fieldLabel='Releases']");
+                            this.onTimeboxCheckboxChange.apply(this, [releases, releases.value]);
+
+                            var iterations = this.down("checkbox[fieldLabel='Iterations']");
+                            this.onTimeboxCheckboxChange.apply(this, [iterations,
+                                iterations.value
+                            ]);
+
+                            var app = Rally.getApp();
+                            app._getDependencies.apply(app, [portfolioItems]);
+                            app._fixYAxisLabels.apply(app, arguments);
+                        },
+                        scope: this,
+                    }
+                });
+
+                this.add(this.chart);
+            },
+
+            _fixYAxisLabels: function () {
+                // Not sure why but sometimes the x and y of the label was not set correctly.
+                var chart = this.chart.down('highchart').chart;
+
+                var that = this;
+                var oldZoom = chart.zoom;
+                chart.zoom = function () {
+                    that.onDependencyCheckboxChange.apply(that, [null, false]);
+                    oldZoom.apply(this, arguments);
+                };
+
+                var oldZoomOut = chart.zoomOut;
+                chart.zoomOut = function () {
+                    oldZoomOut.apply(this, arguments);
+                    var dependencies = that.down("checkbox[fieldLabel='Dependencies']");
+                    that.onDependencyCheckboxChange.apply(that, [dependencies, dependencies.value]);
+                };
+
+                var ticks = chart.axes[1].ticks;
+                if (!ticks) return;
+                for (var t in ticks) {
+                    var label = ticks[t].label;
+                    if (!label) continue;
+                    label.element.setAttribute("labelFor", ticks[t].axis.series[ticks[t].pos].options.id);
+                    if (label.x != label.xy.x) {
+                        label.element.setAttribute("x", label.xy.x);
+                        for (var i = 0; i < label.element.childElementCount; i++) {
+                            label.element.childNodes[i].setAttribute("x", label.xy.x);
+                        }
+                        label.x = label.xy.x;
+                    }
+                    if (label.y != label.xy.y) {
+                        label.element.setAttribute("y", label.xy.y);
+                        for (var i = 0; i < label.element.childElementCount; i++) {
+                            label.element.childNodes[i].setAttribute("y", label.xy.y);
+                        }
+                        label.y = label.xy.y;
+                    }
+                }
+            },
+
+            _drawDependencies: function (dependencies) {
+                var chart = this.chart.down('highchart').chart;
+                var pairs = [];
+
+                Ext.Array.forEach(dependencies, function (v) {
+
+                    var p1 = Ext.Array.filter(chart.series, function (s) {
+                        return s.options.id === v.item;
+                    });
+                    if (!p1) return;
+
+                    var start = p1[0].data[0];
+
+                    Ext.Array.forEach(v.records, function (r) {
+                        var p2 = Ext.Array.filter(chart.series, function (s) {
+                            return s.options.id === r.raw.ObjectID;
+                        });
+                        var end;
+                        if (p2) {
+                            end = p2[0].data[0];
+                        } else {
+                            // then it is a dependency on something not in the current chart 
+                            end = start;
+                        }
+
+                        var startX = start.plotX + chart.plotBox.x;
+                        var startY = start.plotY + chart.plotBox.y;
+
+                        var endX = end.plotX + chart.plotBox.x;
+                        var endY = end.plotY + chart.plotBox.y;
+
+                        if (v.type === 'Successors') {
+                            endX += end.shapeArgs.width;
+                        } else if (v.type === 'Predecessors') {
+                            startX += start.shapeArgs.width;
+                        }
+
+                        var existingLine = Ext.Array.filter(pairs, function (i) {
+                            return ((i.startX === startX && i.startY === startY &&
+                                    i.endX === endX && i.endY === endY) ||
+                                (i.startX === endX && i.startY === endY &&
+                                    i.endX === startX && i.endY === startY)
+                            )
+                        });
+                        if (existingLine.length !== 0) {
+                            return;
+                        }
+
+                        pairs.push({
+                            startX: startX,
+                            startY: startY,
+                            endX: endX,
+                            endY: endY,
+                            type: v.type,
+                            id: 'dependency-' + v.item + '-' + r.raw.ObjectID +
+                                '-',
+                        });
+                    }, this);
+                }, this);
+
+                Ext.Array.forEach(pairs, function (p) {
+                    var moveTo = ['M', p.startX, p.startY];
+                    var draw = ['L', p.endX, p.endY];
+
+                    chart.renderer.path(moveTo.concat(draw))
+                        .attr({
+                            'stroke-width': 2,
+                            stroke: p.type === 'Predecessors' ? 'red' : 'green',
+                            id: p.id,
+                            class: 'dependency',
+                            type: p.type,
+                            zIndex: 20,
+                        })
+                        .add();
+                });
+
+                var dependencies = this.down("checkbox[fieldLabel='Dependencies']");
+                this.onDependencyCheckboxChange.apply(this, [dependencies, dependencies.value]);
+            },
+
+            _getDependencies: function (portfolioItems) {
+
+                this.onDependencyCheckboxChange.apply(this, [null, false]);
+
+                var items = Ext.Array.filter(portfolioItems, function (i) {
+                    return (i.raw.Predecessors.Count > 0 || i.raw.Successors.Count > 0);
+                });
+                if (items.length === 0) {
+                    return;
+                }
+
+                this.dataLoader.GetDependencies({
+                    config: {
+                        items: items
+                    },
+                    success: function (values) {
+                        this._drawDependencies.apply(this, arguments);
+                    },
+                    failure: function (error) {
+                        this._showMask(error);
+                    },
+                    scope: this
+                });
+            },
+
+            _loadData: function () {
+                this._showMask('Loading...');
+
+                this.dataLoader.LoadData({
+                    success: function (values) {
+                        var success = values[0] && values[1] && values[2] && values[3];
+                        this._updateChart(success, values[0], values[1], [].concat(values[2],
+                            values[3]));
+                        this._hideMask();
+                    },
+                    failure: function (error) {
+                        this._showMask(error);
+                    },
+                    scope: this
+                });
+            },
+
+            _categoryFormatter: function (portfolioItem) {
+                return portfolioItem.raw.FormattedID + ': ' + portfolioItem.raw.Name;
+            },
+
+            _addButton: function () {
+                var that = this;
+                var button = Ext.create('Rally.ui.Button', {
+                    text: 'Information',
+                    handler: function () {
+                        that._showMask("Refreshing...");
+                        that._loadData.apply(that);
+                    },
+                    style: {
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        'z-index': 199
+                    }
+                });
+                that.add(button);
+            },
+
+            onTimeboxCheckboxChange: function (checkBox, newValue) {
+                var app = Rally.getApp();
+                if (!checkBox) {
+                    return;
+                }
+                var isIteration = checkBox.fieldLabel === 'Iterations';
+
+                if (app.chart.down('highchart').chart) {
+                    Ext.Array.each(app.chart.down('highchart').chart.xAxis[0].plotLinesAndBands,
+                        function (band) {
+                            if (isIteration === band.options.isIteration && band.svgElem && band.label) {
+                                if (newValue) {
+                                    band.svgElem.show();
+                                    band.label.show();
+                                } else {
+                                    band.svgElem.hide();
+                                    band.label.hide();
+                                }
+                            }
+                        }, app);
+                }
+            },
+
+            onDependencyCheckboxChange: function (checkBox, newValue) {
+                var app = Rally.getApp();
+                if (app.chart.down('highchart').chart) {
+                    Ext.Array.each(app.chart.down('highchart').chart.renderer.box.getElementsByClassName(
+                            "dependency"),
+                        function (path) {
+                            path.style.visibility = newValue ? "visible" : "hidden";
+                        }, app);
+                }
+            },
+
+            _addChecks: function () {
+                var releaseCheck = Ext.create('Rally.ui.CheckboxField', {
+                    fieldLabel: 'Releases',
+                    value: true,
+                    listeners: {
+                        change: this.onTimeboxCheckboxChange,
+                    },
+                    labelAlign: 'right',
+                    style: {
+                        position: 'absolute',
+                        top: 0,
+                        left: 80,
+                        width: '80px',
+                        'z-index': 199
+                    }
+                });
+                this.add(releaseCheck);
+
+                var iterationCheck = Ext.create('Rally.ui.CheckboxField', {
+                    fieldLabel: 'Iterations',
+                    value: true,
+                    listeners: {
+                        change: this.onTimeboxCheckboxChange,
+                    },
+                    labelAlign: 'right',
+                    style: {
+                        position: 'absolute',
+                        top: 0,
+                        left: 200,
+                        width: '80px',
+                        'z-index': 199
+                    }
+                });
+                this.add(iterationCheck);
+
+                var dependenciesCheck = Ext.create('Rally.ui.CheckboxField', {
+                    fieldLabel: 'Dependencies',
+                    value: true,
+                    listeners: {
+                        change: this.onDependencyCheckboxChange,
+                    },
+                    labelAlign: 'right',
+                    style: {
+                        position: 'absolute',
+                        top: 0,
+                        left: 335,
+                        width: '80px',
+                        'z-index': 199
+                    }
+                });
+                this.add(dependenciesCheck);
+            },
+
+            _chartConfig: function (plotBands, categories, series) {
+                var rowHeight = 32;
+                var height = ((series.length + 2) * rowHeight);
+                if (height < 100) height = 100;
+
+                function axisOffset() {
+                    var style = (function (style) {
+                        return (style && style.indexOf("px") > -1) ? parseInt(style, 10) : 0;
+                    })(this.axis.options.labels.style.fontSize);
+
+                    var offset = (this.chart.plotHeight / this.chart.series.length / 2) - (style / -2)
+                    if (this.axis.options.labels.y != offset) {
+                        this.axis.options.labels.y = offset;
+                    }
+                }
+
+                function tooltipFormatter() {
+                    return '<span><b>' + this.point.series.name + '</b>' + '</span><br>' +
+                        '<span>' + 'From:' + new Date(this.x).toLocaleDateString('en-AU') +
+                        '</span><br>' +
+                        (this.x2 ? '<span>' + 'To:' + new Date(this.x2).toLocaleDateString('en-AU') +
+                            '</span><br>' : '') +
+                        '<span>' + this.point.label.replace(/<div>/i, '<br>').replace(/&nbsp;/gi, ' ').replace(
+                            /<div>/gi, '<span>').replace(/<\/div>/gi, "</span><br>") + '</span>';
+                }
+
+                return {
+                    chart: {
+                        type: 'xrange',
+                        zoomType: 'x',
+                        height: height,
+                    },
+                    title: {
+                        text: 'Timeline'
+                    },
+                    xAxis: {
+                        opposite: true,
+                        type: 'datetime',
+                        tickInterval: 7 * 24 * 3600 * 1000,
+                        maxZoom: 7 * 24 * 3600 * 1000,
+                        labels: {
+                            formatter: function () {
+                                return new Date(this.value).toLocaleDateString('en-AU');
+                            },
+                        },
+                        plotLines: [{
+                            value: Date.now(),
+                            color: 'black',
+                            width: 2,
+                            id: 'plot-line-today',
+                            zIndex: 10,
+                        }],
+                        plotBands: Ext.Array.filter(plotBands, function (pb) {
+                            function showTooltip(evt) {
+                                this.axis.chart.showCustomTooltip({
+                                    text: '<span><b>' +
+                                        this.label.text +
+                                        '</b></span><br>' +
+                                        '<span>' +
+                                        'From:' + new Date(this.options.from).toLocaleDateString(
+                                            'en-AU') +
+                                        '</span><br>' +
+                                        '<span>' +
+                                        'To:' + new Date(this.options.to).toLocaleDateString(
+                                            'en-AU') +
+                                        '</span><br>' +
+                                        '<span>' +
+                                        this.label.alignOptions.data
+                                        .replace(/div/i, '<br>')
+                                        .replace(/&nbsp;/gi, ' ')
+                                        .replace(/<div>/gi, '<span>')
+                                        .replace(/<\/div>/gi, "</span><br>") +
+                                        '</span>',
+                                    borderColor: this.label.alignOptions.color,
+                                    width: '250px',
+                                });
+                            };
+                            pb.events = {
+                                click: showTooltip,
+                                mouseover: showTooltip,
+                                mouseout: function (e) {
+                                    this.axis.chart.tooltip.hide();
+                                },
+                            };
+                            return pb;
+                        }),
+                    },
+                    yAxis: [{
+                        title: 'Items',
+                        tickInterval: 1,
+                        tickmarkPlacement: 'between',
+                        categories: categories,
+                        labels: {
+                            style: {
+                                width: '170px',
+                                height: rowHeight + 'px',
+                                'text-align': 'left',
+                                top: 0,
+                                left: 0,
+                            },
+                            formatter: function () {
+                                var label = this.axis.defaultLabelFormatter.call(this);
+                                if (label.length > 50) {
+                                    label = label.substring(0, 50) + '\u2026';
+                                }
+                                return label;
+                            },
+                            align: 'left',
+                            x: -20,
+                            events: {
+                                click: function (label, series, evt) {
+                                    // open item
+                                    debugger;
+                                    var context = Rally.environment.getContext();
+                                    var currentProjectOid = Rally.util.Ref.getOidFromRef(
+                                        context.getProject()._ref);
+                                    var objectID = label.element.getAttribute("labelFor");
+                                    var url = '/#/' + Rally.environment.getContext().getScopeStr(
+                                        null) + '/detail' + Rally.util.Ref.getRefFromTypeAndOid(
+                                        Rally.getApp().getSetting('Portfolio Item Type'),
+                                        objectID);
+                                    console.log(url);
+                                    window.top.document.location = url;
+                                },
+                            },
+                        },
+                    }, {
+                        gridLineColor: 'transparent',
+                        labels: {
+                            enabled: false,
+                        }
+                    }],
+                    legend: {
+                        enabled: false,
+                    },
+                    plotOptions: {
+                        series: {
+                            pointWidth: 10,
+                            minPointLength: 5,
+                            dataLabels: true,
+                        }
+                    },
+                    tooltip: {
+                        positioner: function (x, y, point) {
+                            return {
+                                x: (point && point.plotX ? point.plotX : x) + this.chart.plotBox.x,
+                                y: (point && point.plotY ? point.plotY : y) + this.chart.plotBox.y
+                            };
+                        },
+                        //followPointer: true,
+                        formatter: tooltipFormatter,
+                        width: '250px',
+                    },
+                }
+            },
+
+            AsUTC: function (d, backup) {
+                var date = new Date(d);
+                if (date.getUTCFullYear() < 2010) return backup ? this.AsUTC(backup) : undefined;
+                return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+            },
+
+            _createPlotbandsFromTimeboxes: function (timeboxes) {
+                // restructure the timeboxes
+                var plotBands = [];
+                Ext.each(timeboxes, function (tb) {
+                    var timebox = tb.raw;
+                    var isIteration = timebox._type === 'Iteration';
+                    plotBands.push({
+                        color: timebox.DisplayColor ? timebox.DisplayColor :
+                            (isIteration ? 'rgba(255, 255, 0, 0.2)' :
+                                'rgba(68, 170, 213, .2)'),
+                        from: this.AsUTC(timebox.StartDate || timebox.ReleaseStartDate),
+                        to: this.AsUTC(timebox.EndDate || timebox.ReleaseDate),
+                        zIndex: isIteration ? 1 : 0,
+                        isIteration: isIteration,
+                        label: {
+                            text: timebox.Name,
+                            textAlign: 'left',
+                            rotation: 90,
+                            data: timebox.Theme,
+                            style: {
+                                color: '#666',
+                            },
+                            zIndex: 10,
+                        },
+                    });
+                }, this);
+                return plotBands;
+            },
+
+            _createSeriesFromPortfolioItems: function (categories, portfolioItems) {
+                // restructure the portfolioItems
+                var series = [];
+                Ext.each(portfolioItems, function (t) {
+                    var portfolioItem = t.raw;
+                    var item = {
+                        type: 'column',
+                        yAxis: 0,
+                        name: portfolioItem.Name,
+                        id: portfolioItem.ObjectID,
+                        data: []
+                    };
+                    if (this.AsUTC(portfolioItem.PlannedStartDate) && this.AsUTC(portfolioItem.PlannedEndDate)) {
+                        item.data.push({
+                            x: this.AsUTC(portfolioItem.PlannedStartDate),
+                            x2: this.AsUTC(portfolioItem.PlannedEndDate),
+                            y: categories.indexOf(this._categoryFormatter(t)),
+                            label: portfolioItem.Description,
+                            color: 'red',
+                            height: 20,
+                            zIndex: 1,
+                        });
+                    } else if (this.AsUTC(portfolioItem.CreationDate) && this.AsUTC(
+                            portfolioItem.CreationDate)) {
+                        item.data.push({
+                            x: this.AsUTC(portfolioItem.CreationDate),
+                            x2: this.AsUTC(portfolioItem.CreationDate),
+                            y: categories.indexOf(this._categoryFormatter(t)),
+                            label: '<b>NO PLANNED START/END SET</b><br>' +
+                                portfolioItem.Description,
+                            color: 'black',
+                            height: 20,
+                            zIndex: 1,
+                        });
+                    }
+                    if (this.AsUTC(portfolioItem.ActualStartDate)) {
+                        item.data.push({
+                            x: this.AsUTC(portfolioItem.ActualStartDate),
+                            x2: this.AsUTC(portfolioItem.ActualEndDate, portfolioItem.ActualStartDate),
+                            y: categories.indexOf(this._categoryFormatter(t)),
+                            label: portfolioItem.Description,
+                            color: 'blue',
+                            height: 10,
+                            zIndex: 2,
+                        });
+                    }
+                    series.push(item);
+                }, this);
+                return series;
+            },
+
+            _createSeriesFromMilestones: function (milestones) {
+                // restructure the milestones
+                var series = [];
+                var thisProject = this.getContext().getDataContext().project;
+                Ext.each(milestones, function (m) {
+                    var milestone = m.raw;
+                    var item = {
+                        type: 'scatter',
+                        yAxis: 1,
+                        name: milestone.Name,
+                        color: milestone.DisplayColor,
+                        marker: {
+                            symbol: 'triangle-down',
+                            lineWidth: 2,
+                            lineColor: milestone.DisplayColor,
+                            radius: 8
+                        },
+                        data: [{
+                            x: this.AsUTC(milestone.TargetDate),
+                            y: 1,
+                            label: milestone.Notes,
+                        }],
+                    }
+                    if (milestone.TargetProject._ref === thisProject && this.AsUTC(milestone.TargetDate)) {
+                        series.push(item);
+                    }
+                }, this);
+
+                return series;
+            },
+        });
+
+        Rally.onReady(function () {
+            if (Rally && Rally.sdk && Rally.sdk.dependencies && Rally.sdk.dependencies.Analytics) {
+                Rally.sdk.dependencies.Analytics.load(function () {
+                    window.Highcharts.defaultOptions = window.Highcharts.getOptions();
+                    Ext.Loader.loadScript({
+                        url: '//code.highcharts.com/modules/exporting.js',
+                        onLoad: function () {
+                            Rally.ExtendHighcharts(window.Highcharts);
+                            Rally.launchApp('PortfolioTimelineExtendedApp', {
+                                name: 'Portfolio Timeline Extended'
+                            });
+                        },
+                        onError: function () {
+                            console.log('error');
+                        }
+                    });
+                }, this);
+            }
+        });
+
+    })();
+</script>
