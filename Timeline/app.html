@@ -219,7 +219,8 @@
                 });
                 tt.label.attr("opacity", 1);
                 tt.label.show();
-                var position = this.options.tooltip.positioner.apply(this);
+                var position = { x: 0, y: 0}; 
+                try { this.options.tooltip.positioner.apply(this); } catch (e) {}
                 tt.updatePosition({
                     plotX: position.x,
                     plotY: position.y
@@ -513,11 +514,13 @@
                 var items = events.config && events.config.items ? events.config.items : [];
 
                 var queries = [];
-                Ext.Array.forEach(items, function (i) {
-                    queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID,
-                        'Predecessors'));
-                    queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID,
-                        'Successors'));
+                Ext.Array.forEach(items, function (i) {                    
+                    if (i.raw.Successors.Count > 0) {
+                        queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID, 'Predecessors'));
+                    }                    
+                    if (i.raw.Predecessors.Count > 0) {
+                        queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID, 'Successors'));
+                    }
                 }, this);
 
                 Deft.Promise.all(queries).then({
@@ -595,6 +598,17 @@
 
             chart: null,
             dataLoader: null,
+
+            dependencyMarker:  '' +
+                                        '      <marker id="dependencyMarker" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse" style="overflow:visible"> ' +
+                                        '          <path d="M0,0 L0,6 L9,3 z" fill="#660066" /> ' +
+                                        '      </marker> ',
+
+            unknownMarker:       '' +
+                                           '    <marker id="unknownMarker" markerWidth="4" markerHeight="4" refX="2" refY="2" markerUnits="userSpaceOnUse"> ' +
+                                           '         <circle cx="2" cy="2" r="2" fill="#660066" /> ' +
+                                           '    </marker> ',
+            
 
             getOptions: function () {
                 return [{
@@ -724,8 +738,18 @@
                             ]);
 
                             var app = Rally.getApp();
+                            var chartHC = app.chart.down('highchart').chart;
+
+                            var dependencyMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                            dependencyMarker.innerHTML += app.dependencyMarker;
+                            chartHC.renderer.defs.element.appendChild(dependencyMarker);
+
+                            var unknownMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                            unknownMarker.innerHTML += app.unknownMarker;
+                            chartHC.renderer.defs.element.appendChild(unknownMarker);
+                                                        
                             app._getDependencies.apply(app, [portfolioItems]);
-                            app._fixYAxisLabels.apply(app, arguments);
+                            app._fixYAxisLabels.apply(app, arguments);                             
                         },
                         scope: this,
                     }
@@ -779,76 +803,84 @@
                 var chart = this.chart.down('highchart').chart;
                 var pairs = [];
 
-                Ext.Array.forEach(dependencies, function (v) {
-
-                    var p1 = Ext.Array.filter(chart.series, function (s) {
-                        return s.options.id === v.item;
+                pairs.ExistsAlready = function(point) {
+                    var existingLine = Ext.Array.filter(this, function (i) {
+                        return ((i.startX === point.startX && i.startY === point.startY &&
+                                i.endX === point.endX && i.endY === point.endY) ||
+                            (i.startX === point.endX && i.startY === point.endY &&
+                                i.endX === point.startX && i.endY === point.startY)
+                        )
                     });
-                    if (!p1) return;
+                    return existingLine.length !== 0;
+                };
 
-                    var start = p1[0].data[0];
+                function createPoint(start, end, type, color, id, markerEnd, markerStart) {
+                    var startX = start.plotX + chart.plotBox.x;
+                    var startY = start.plotY + chart.plotBox.y;
+
+                    var endX = end.plotX + chart.plotBox.x;
+                    var endY = end.plotY + chart.plotBox.y;
+
+                    var isPredecessor = type === 'Predecessors';
+                    if (isPredecessor) {
+                        startX += start.shapeArgs.width;
+                    } else {
+                        endX += end.shapeArgs.width;
+                    }
+
+                    return {
+                        startX: startX,
+                        startY: startY,
+                        endX: endX,
+                        endY: endY,
+                        moveTo: ['M', startX, startY],
+                        draw: ['L', endX, endY], 
+                        config: { 
+                            'stroke-width': 2,
+                            stroke: color,
+                            id: id,
+                            class: 'dependency',
+                            type: type,
+                            zIndex: 30,
+                            'marker-end' : markerEnd || 'none',
+                            'marker-start' : markerStart || 'none',
+                        }
+                    }
+                }
+
+                function FindByID(id) {
+                    var p1 = Ext.Array.filter(chart.series, function (s) {
+                        return s.options.id === id;
+                    }, this);
+                    if (p1) {                    
+                        return p1[0].data[0];
+                    }
+                }
+
+                Ext.Array.forEach(dependencies, function (v) {
+                    var start = FindByID(v.item);
+
+                    // dependency not in the queryable list
+                    if (v.records.length === 0) {
+                        var point = createPoint(start, start, v.type, '#660066', 'dependency-' + v.item + '-UNKNOWN-', 'url(#dependencyMarker)', 'url(#unknownMarker)');
+                        if (!pairs.ExistsAlready(point)) {
+                            pairs.push(point); 
+                        }
+                    }
 
                     Ext.Array.forEach(v.records, function (r) {
-                        var p2 = Ext.Array.filter(chart.series, function (s) {
-                            return s.options.id === r.raw.ObjectID;
-                        });
-                        var end;
-                        if (p2) {
-                            end = p2[0].data[0];
-                        } else {
-                            // then it is a dependency on something not in the current chart 
-                            end = start;
-                        }
+                        var end = FindByID(r.raw.ObjectID) || start;
+	                    var point = createPoint(start, end, v.type, '#660066', 'dependency-' + v.item + '-' + end.category + '-', 'url(#dependencyMarker)', 'url(#dependencyMarker)');
 
-                        var startX = start.plotX + chart.plotBox.x;
-                        var startY = start.plotY + chart.plotBox.y;
-
-                        var endX = end.plotX + chart.plotBox.x;
-                        var endY = end.plotY + chart.plotBox.y;
-
-                        if (v.type === 'Successors') {
-                            endX += end.shapeArgs.width;
-                        } else if (v.type === 'Predecessors') {
-                            startX += start.shapeArgs.width;
-                        }
-
-                        var existingLine = Ext.Array.filter(pairs, function (i) {
-                            return ((i.startX === startX && i.startY === startY &&
-                                    i.endX === endX && i.endY === endY) ||
-                                (i.startX === endX && i.startY === endY &&
-                                    i.endX === startX && i.endY === startY)
-                            )
-                        });
-                        if (existingLine.length !== 0) {
-                            return;
-                        }
-
-                        pairs.push({
-                            startX: startX,
-                            startY: startY,
-                            endX: endX,
-                            endY: endY,
-                            type: v.type,
-                            id: 'dependency-' + v.item + '-' + r.raw.ObjectID +
-                                '-',
-                        });
+                        // check if a line already exists so we dont draw two - we use a double headed arrow  
+                        if (!pairs.ExistsAlready(point)) {
+                            pairs.push(point);
+                        }   
                     }, this);
                 }, this);
 
                 Ext.Array.forEach(pairs, function (p) {
-                    var moveTo = ['M', p.startX, p.startY];
-                    var draw = ['L', p.endX, p.endY];
-
-                    chart.renderer.path(moveTo.concat(draw))
-                        .attr({
-                            'stroke-width': 2,
-                            stroke: p.type === 'Predecessors' ? 'red' : 'green',
-                            id: p.id,
-                            class: 'dependency',
-                            type: p.type,
-                            zIndex: 20,
-                        })
-                        .add();
+                    chart.renderer.path(p.moveTo.concat(p.draw)).attr(p.config).add();
                 });
 
                 var dependencies = this.down("checkbox[fieldLabel='Dependencies']");
@@ -1114,11 +1146,10 @@
                                 return label;
                             },
                             align: 'left',
-                            x: -20,
+                            x: 0,
                             events: {
                                 click: function (label, series, evt) {
                                     // open item
-                                    debugger;
                                     var context = Rally.environment.getContext();
                                     var currentProjectOid = Rally.util.Ref.getOidFromRef(
                                         context.getProject()._ref);
@@ -1133,6 +1164,7 @@
                             },
                         },
                     }, {
+                        title: 'Items',
                         gridLineColor: 'transparent',
                         labels: {
                             enabled: false,
@@ -1235,7 +1267,7 @@
                     if (this.AsUTC(portfolioItem.ActualStartDate)) {
                         item.data.push({
                             x: this.AsUTC(portfolioItem.ActualStartDate),
-                            x2: this.AsUTC(portfolioItem.ActualEndDate, portfolioItem.ActualStartDate),
+                            x2: this.AsUTC(portfolioItem.ActualEndDate, Date.now()),
                             y: categories.indexOf(this._categoryFormatter(t)),
                             label: portfolioItem.Description,
                             color: 'blue',
