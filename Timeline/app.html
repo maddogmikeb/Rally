@@ -209,17 +209,36 @@
                 }
             };
 
+            H.Chart.prototype.MousePosition = { x: 0, y: 0 };
+
+            H.Chart.prototype.captureMousePosition = function() {
+                var IE = document.all ? true : false;
+                if (!IE) document.captureEvents(Event.MOUSEMOVE);
+                document.onmousemove = function getMouseXY(e) {
+                    var tempX, tempY;
+                    if (IE) { 
+                        tempX = event.clientX + document.body.scrollLeft;
+                        tempY = event.clientY + document.body.scrollTop;
+                    } else {  
+                        tempX = e.pageX;
+                        tempY = e.pageY;
+                    }  
+                    if (tempX < 0) { tempX = 0 }
+                    if (tempY < 0) { tempY = 0 } 
+                    H.Chart.prototype.MousePosition = { x: tempX, y: tempY };
+                    return true;
+                };
+            }
+
             H.Chart.prototype.showCustomTooltip = function (options) {
                 var tt = this.tooltip;
                 tt.isHidden = false;
                 tt.hide();
-                tt.label.attr({
-                    text: options.text,
-                    stroke: options.borderColor
-                });
-                tt.label.attr("opacity", 1);
+                tt.label.attr({ text: options.text });
+                options.style.opacity = 1;
+                tt.label.styles = window.Highcharts.merge(tt.label.styles, options.style);
                 tt.label.show();
-                var position = { x: 0, y: 0}; 
+                var position = this.MousePosition;
                 try { this.options.tooltip.positioner.apply(this); } catch (e) {}
                 tt.updatePosition({
                     plotX: position.x,
@@ -228,8 +247,8 @@
                 if (window.HighchartsAdapter) {
                     window.HighchartsAdapter.fireEvent(this, "tooltipRefresh", {
                         text: options.text,
-                        x: position.x + this.plotLeft,
-                        y: position.y + this.plotTop,
+                        x: position.x,
+                        y: position.y,
                         borderColor: options.borderColor
                     });
                 }
@@ -310,6 +329,7 @@
             extendHighchartsScatter(HC);
             extendHighchartsTooltip(HC);
             extendHighchartsExport(HC);
+            HC.Chart.prototype.captureMousePosition();
         }
 
     })();
@@ -321,9 +341,11 @@
 
         Ext.define('DataLoader', {
 
+            requires: ['Rally.data.Ranker'],
+
             _buildQueryFilter: function (model, settingName) {
                 var queries = [];
-                try {
+                try {                    
                     var setting = this.getSetting(settingName);
                     if (!setting && this.getSettings().query) {
                         var fieldIndex = Ext.Array.map(Ext.Array.filter(this.getSettingsFields(),
@@ -373,10 +395,14 @@
                 return [Rally.data.QueryFilter.fromQueryString(q)];
             },
 
-            LoadData: function (events) {
+            LoadData: function (events, config) {
+
+                if (!config) config = {};
+                if (!config.portfolioItem) config.portfolioItem = {};
+
                 Deft.Promise.all(
                     [
-                        this._getPortfolioItems(events.scope),
+                        this._getPortfolioItems(events.scope, config.portfolioItem.type, config.portfolioItem.limit),
                         this._getMilestoneItems(events.scope),
                         this._getReleases(events.scope),
                         this._getIterations(events.scope),
@@ -474,30 +500,37 @@
                 return deferred.promise;
             },
 
-            _getPortfolioItems: function (scope) {
+            _getRankField: function() {
+                return Rally.getApp().getContext().getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled ?
+                    Rally.data.Ranker.RANK_FIELDS.DND :
+                    Rally.data.Ranker.RANK_FIELDS.MANUAL;
+            },
+
+            _getPortfolioItems: function (scope, portfolioItemType, portfoliItemLimit) {
                 var deferred = Ext.create('Deft.Deferred');
-
-                var type = Rally.getApp().getSetting('Portfolio Item Type');
-                console.log(type);
-
                 Ext.create('Rally.data.wsapi.Store', {
-                    model: type,
+                    model: portfolioItemType,
                     autoLoad: true,
                     fetch: ['ObjectID', 'FormattedID', 'DisplayColor', 'Name',
                         'Description', 'PlannedStartDate', 'PlannedEndDate',
                         'ActualStartDate', 'ActualEndDate', 'CreationDate',
-                        'DragAndDropRank', 'State', 'Predecessors', 'Successors'
+                         this._getRankField(), 'State', 'Predecessors', 'Successors'
                     ],
                     context: scope.getContext().getDataContext(),
-                    limit: Infinity,
+                    limit: portfoliItemLimit || Infinity,
                     filters: this._buildPortfolioItemQueryFilter(scope),
                     sorters: [{
-                        property: 'DragAndDropRank',
+                        property: this._getRankField(),
                         direction: 'DESC'
                     }],
                 }).load({
                     callback: function (records, operation) {
                         if (operation.wasSuccessful()) {
+                            if (portfoliItemLimit && records.length > portfoliItemLimit) {
+                                records.reverse();
+                                records = records.slice(0, portfoliItemLimit);
+                                records.reverse();
+                            }
                             deferred.resolve(records.length > 0 ? records : []);
                         } else {
                             deferred.reject(this.model.displayName + " - " + operation.error &&
@@ -619,7 +652,7 @@
             },
 
             config: {
-                defaultSettings: {
+                defaultSettings: {                    
                     'Portfolio Item Type': 'PortfolioItem/Feature',
                     'query': [
                         "", // PortfolioItem
@@ -627,6 +660,7 @@
                         "(Project.ObjectID = {projectOid})", // Release
                         "(Project.ObjectID = {projectOid})" // Iteration
                     ].join(','),
+                    'PortfolioItemFilter' : 0,
                 }
             },
 
@@ -655,6 +689,13 @@
                         fieldLabel: 'Portfolio Item Filter',
                     },
                     type: 'query'
+                }, {
+                    name: 'PortfolioItemLimit', 
+                    xtype: 'rallynumberfield',
+                    value: this.getSetting('PortfolioItemLimit'),
+                    config: {
+                        fieldLabel: 'Portfolio Item Limit',
+                    },
                 }, {
                     name: 'MilestoneFilter',
                     config: {
@@ -926,6 +967,12 @@
                         this._showMask(error);
                     },
                     scope: this
+                },
+                { 
+                    portfolioItem: {
+                        type: this.getSetting('Portfolio Item Type'),
+                        limit: Ext.Number.from(this.getSetting('PortfolioItemLimit'), undefined),
+                    },             
                 });
             },
 
@@ -1110,9 +1157,14 @@
                                         .replace(/&nbsp;/gi, ' ')
                                         .replace(/<div>/gi, '<span>')
                                         .replace(/<\/div>/gi, "</span><br>") +
-                                        '</span>',
-                                    borderColor: this.label.alignOptions.color,
-                                    width: '250px',
+                                         '</span>',
+                                    style: {
+                                        width: '450px',
+                                        minWidth: '450px',
+                                        height: '100px',
+                                        minHeight: '100px',
+                                        whiteSpace: 'pre-line',
+                                    },                                        
                                 });
                             };
                             pb.events = {
@@ -1140,8 +1192,8 @@
                             },
                             formatter: function () {
                                 var label = this.axis.defaultLabelFormatter.call(this);
-                                if (label.length > 50) {
-                                    label = label.substring(0, 50) + '\u2026';
+                                if (label.length > 45) {
+                                    label = label.substring(0, 45) + '\u2026';
                                 }
                                 return label;
                             },
@@ -1182,14 +1234,16 @@
                     },
                     tooltip: {
                         positioner: function (x, y, point) {
-                            return {
-                                x: (point && point.plotX ? point.plotX : x) + this.chart.plotBox.x,
-                                y: (point && point.plotY ? point.plotY : y) + this.chart.plotBox.y
-                            };
+                            return this.chart.MousePosition;
                         },
-                        //followPointer: true,
                         formatter: tooltipFormatter,
-                        width: '250px',
+                        style: {
+                            width: '450px',
+                            minWidth: '450px',
+                            height: '100px',
+                            minHeight: '100px',
+                            whiteSpace: 'pre-line',
+                        },
                     },
                 }
             },
