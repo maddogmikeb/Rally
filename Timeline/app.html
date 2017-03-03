@@ -229,30 +229,6 @@
                     return true;
                 };
             }
-
-            H.Chart.prototype.showCustomTooltip = function (options) {
-                var tt = this.tooltip;
-                tt.isHidden = false;
-                tt.hide();
-                tt.label.attr({ text: options.text });
-                options.style.opacity = 1;
-                tt.label.styles = window.Highcharts.merge(tt.label.styles, options.style);
-                tt.label.show();
-                var position = this.MousePosition;
-                try { this.options.tooltip.positioner.apply(this); } catch (e) {}
-                tt.updatePosition({
-                    plotX: position.x,
-                    plotY: position.y
-                });
-                if (window.HighchartsAdapter) {
-                    window.HighchartsAdapter.fireEvent(this, "tooltipRefresh", {
-                        text: options.text,
-                        x: position.x,
-                        y: position.y,
-                        borderColor: options.borderColor
-                    });
-                }
-            };
         }
 
         function extendHighchartsExport(HC) {
@@ -514,7 +490,13 @@
                     fetch: ['ObjectID', 'FormattedID', 'DisplayColor', 'Name',
                         'Description', 'PlannedStartDate', 'PlannedEndDate',
                         'ActualStartDate', 'ActualEndDate', 'CreationDate',
-                         this._getRankField(), 'State', 'Predecessors', 'Successors'
+                         this._getRankField(), 'State', 'Predecessors', 'Successors',
+                         'Release','ReleaseDate','ReleaseStartDate','Name',
+                         'LateChildCount','Notes', 'UnEstimatedLeafStoryCount',
+                         'PercentDoneByStoryPlanEstimate', 'PercentDoneByStoryCount',
+                         'LeafStoryPlanEstimateTotal', 'LeafStoryCount',
+                         'DirectChildrenCount', 'AcceptedLeafStoryPlanEstimateTotal',
+                         'AcceptedLeafStoryCount'
                     ],
                     context: scope.getContext().getDataContext(),
                     limit: portfoliItemLimit || Infinity,
@@ -545,7 +527,6 @@
 
             GetDependencies: function (events) {
                 var items = events.config && events.config.items ? events.config.items : [];
-
                 var queries = [];
                 Ext.Array.forEach(items, function (i) {                    
                     if (i.raw.Successors.Count > 0) {
@@ -555,7 +536,6 @@
                         queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID, 'Successors'));
                     }
                 }, this);
-
                 Deft.Promise.all(queries).then({
                     success: function () {
                         if (events) {
@@ -578,15 +558,11 @@
                     fetch: ['ObjectID', 'FormattedID', 'DisplayColor', 'Name',
                         'Description', 'PlannedStartDate', 'PlannedEndDate',
                         'ActualStartDate', 'ActualEndDate', 'CreationDate',
-                        'DragAndDropRank', 'State', 'Predecessors', 'Successors'
+                        this._getRankField(), 'State', 'Predecessors', 'Successors'
                     ],
                     context: scope.getContext().getDataContext(),
                     limit: Infinity,
                     filters: this._buildPortfolioItemDependencyQueryFilter(scope, item, type),
-                    sorters: [{
-                        property: 'DragAndDropRank',
-                        direction: 'DESC'
-                    }],
                 }).load({
                     callback: function (records, operation) {
                         if (operation.wasSuccessful()) {
@@ -631,6 +607,7 @@
 
             chart: null,
             dataLoader: null,
+            data: null, 
 
             dependencyMarker:  '' +
                                         '      <marker id="dependencyMarker" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse" style="overflow:visible"> ' +
@@ -757,6 +734,8 @@
                 var seriesItems = this._createSeriesFromPortfolioItems(categories, portfolioItems);
                 var ms = Ext.Array.unique(this._createSeriesFromMilestones(milestones));
 
+                this.data = portfolioItems; // get a record of the portfolio items 
+
                 var series = [].concat(seriesItems, ms);
                 var chartConfig = this._chartConfig(plotBands, categories, series);
 
@@ -790,14 +769,73 @@
                             chartHC.renderer.defs.element.appendChild(unknownMarker);
                                                         
                             app._getDependencies.apply(app, [portfolioItems]);
-                            app._fixYAxisLabels.apply(app, arguments);                             
+                            app._fixYAxisLabels.apply(app, arguments);                              
                         },
                         scope: this,
                     }
-                });
+                });                
 
                 this.add(this.chart);
             },
+
+            pop: null,
+
+            showTooltip: function(event, type) {
+                if (type === 'Timebox') {
+                    var chart = this.axis.chart;
+                    if (!chart.lbl) {
+                        chart.lbl = chart.renderer.label('')
+                            .attr({
+                                padding: 10,
+                                r: 10,
+                                fill: 'white',
+                            }).css({ 
+                                color: '#666'
+                            }).add();
+                    }                    
+                    var text = '<br><b>' + (this.options.isIteration ? 'Iteration' : 'Release') + 
+                            ': ' + this.label.text + 
+                            ' (' + new Date(this.options.from).toLocaleDateString('en-AU') + 
+                            '-' + new Date(this.options.to).toLocaleDateString('en-AU') + ')</b>';
+                    chart.lbl
+                        .show()
+                        .attr({
+                            text: text,
+                        });                            
+                } else if (type === 'PortfolioItem') {
+                    var records = Ext.Array.filter(this.data, function (record) {
+                        return record.raw.ObjectID === event.currentTarget.ObjectID;
+                    });
+                    if (records.length === 0) return;
+
+                    var record = records[0];
+
+                    this.pop = Rally.ui.popover.PopoverFactory.bake({
+                        field: 'PercentDoneByStoryPlanEstimate',
+                        //type: this.getSetting('Portfolio Item Type'),
+                        oid: record.raw.ObjectID, 
+                        record: record,
+                        target: Ext.Element.get(event.currentTarget.graphic.element) || Ext.Element.getActiveElement(),
+                        percentDoneData: record.data,
+                        percentDoneName: "PercentDoneByStoryCount",
+                        piRef: record.data._ref,
+                        viewportPadding: [15, 25, 15, 215]
+                    });
+                }
+            }, 
+            
+            hideTooltip: function() {
+                if (this.pop) {
+                    this.pop.hide();
+                    this.pop.destroy();
+                }
+                this.pop = null;
+                if (this.axis && this.axis.chart && this.axis.chart.lbl) {
+                    //this.axis.chart.lbl.destroy();
+                    //this.axis.chart.lbl = null;
+                    this.axis.chart.lbl.hide();
+                }
+            },             
 
             _fixYAxisLabels: function () {
                 // Not sure why but sometimes the x and y of the label was not set correctly.
@@ -900,7 +938,6 @@
 
                 Ext.Array.forEach(dependencies, function (v) {
                     var start = FindByID(v.item);
-
                     // dependency not in the queryable list
                     if (v.records.length === 0) {
                         var point = createPoint(start, start, v.type, '#660066', 'dependency-' + v.item + '-UNKNOWN-', 'url(#dependencyMarker)', 'url(#unknownMarker)');
@@ -908,11 +945,9 @@
                             pairs.push(point); 
                         }
                     }
-
                     Ext.Array.forEach(v.records, function (r) {
                         var end = FindByID(r.raw.ObjectID) || start;
 	                    var point = createPoint(start, end, v.type, '#660066', 'dependency-' + v.item + '-' + end.category + '-', 'url(#dependencyMarker)', 'url(#dependencyMarker)');
-
                         // check if a line already exists so we dont draw two - we use a double headed arrow  
                         if (!pairs.ExistsAlready(point)) {
                             pairs.push(point);
@@ -929,7 +964,6 @@
             },
 
             _getDependencies: function (portfolioItems) {
-
                 this.onDependencyCheckboxChange.apply(this, [null, false]);
 
                 var items = Ext.Array.filter(portfolioItems, function (i) {
@@ -959,8 +993,7 @@
                 this.dataLoader.LoadData({
                     success: function (values) {
                         var success = values[0] && values[1] && values[2] && values[3];
-                        this._updateChart(success, values[0], values[1], [].concat(values[2],
-                            values[3]));
+                        this._updateChart(success, values[0], values[1], [].concat(values[2], values[3]));
                         this._hideMask();
                     },
                     failure: function (error) {
@@ -1138,40 +1171,16 @@
                             zIndex: 10,
                         }],
                         plotBands: Ext.Array.filter(plotBands, function (pb) {
-                            function showTooltip(evt) {
-                                this.axis.chart.showCustomTooltip({
-                                    text: '<span><b>' +
-                                        this.label.text +
-                                        '</b></span><br>' +
-                                        '<span>' +
-                                        'From:' + new Date(this.options.from).toLocaleDateString(
-                                            'en-AU') +
-                                        '</span><br>' +
-                                        '<span>' +
-                                        'To:' + new Date(this.options.to).toLocaleDateString(
-                                            'en-AU') +
-                                        '</span><br>' +
-                                        '<span>' +
-                                        this.label.alignOptions.data
-                                        .replace(/div/i, '<br>')
-                                        .replace(/&nbsp;/gi, ' ')
-                                        .replace(/<div>/gi, '<span>')
-                                        .replace(/<\/div>/gi, "</span><br>") +
-                                         '</span>',
-                                    style: {
-                                        width: '450px',
-                                        minWidth: '450px',
-                                        height: '100px',
-                                        minHeight: '100px',
-                                        whiteSpace: 'pre-line',
-                                    },                                        
-                                });
-                            };
                             pb.events = {
-                                click: showTooltip,
-                                mouseover: showTooltip,
-                                mouseout: function (e) {
-                                    this.axis.chart.tooltip.hide();
+                                click: function(event) {                                  
+                                    //Ext.defer(function(event) {
+                                        Rally.getApp().showTooltip.apply(this, [event, 'Timebox']);
+                                    //}, 200, this, [event]);
+                                },
+                                mouseout: function() {
+                                    //Ext.defer(function() {
+                                        Rally.getApp().hideTooltip.apply(this, arguments);
+                                    //}, 200, this, arguments);
                                 },
                             };
                             return pb;
@@ -1230,20 +1239,26 @@
                             pointWidth: 10,
                             minPointLength: 5,
                             dataLabels: true,
+                            point: {
+                                events: {
+                                    click: function (event) {
+                                        Ext.defer(function(event) {
+                                            this.showTooltip.apply(this, [event, 'PortfolioItem']);
+                                        },  200, Rally.getApp(), [event]);
+                                    }
+                                }
+                            },
+                            events: {
+                                mouseOut: function () {
+                                    Ext.defer(function() {
+                                        this.hideTooltip.apply(this, arguments);
+                                    },  200, Rally.getApp(), arguments);
+                                }
+                            },
                         }
                     },
                     tooltip: {
-                        positioner: function (x, y, point) {
-                            return this.chart.MousePosition;
-                        },
-                        formatter: tooltipFormatter,
-                        style: {
-                            width: '450px',
-                            minWidth: '450px',
-                            height: '100px',
-                            minHeight: '100px',
-                            whiteSpace: 'pre-line',
-                        },
+                        enabled: false,
                     },
                 }
             },
@@ -1272,7 +1287,10 @@
                             text: timebox.Name,
                             textAlign: 'left',
                             rotation: 90,
-                            data: timebox.Theme,
+                            data: {
+                                theme: timebox.Theme,
+                                type: timebox._type,
+                            },
                             style: {
                                 color: '#666',
                             },
@@ -1292,7 +1310,7 @@
                         type: 'column',
                         yAxis: 0,
                         name: portfolioItem.Name,
-                        id: portfolioItem.ObjectID,
+                        ObjectID: portfolioItem.ObjectID,
                         data: []
                     };
                     if (this.AsUTC(portfolioItem.PlannedStartDate) && this.AsUTC(portfolioItem.PlannedEndDate)) {
@@ -1304,9 +1322,9 @@
                             color: 'red',
                             height: 20,
                             zIndex: 1,
+                            ObjectID: portfolioItem.ObjectID,
                         });
-                    } else if (this.AsUTC(portfolioItem.CreationDate) && this.AsUTC(
-                            portfolioItem.CreationDate)) {
+                    } else if (this.AsUTC(portfolioItem.CreationDate) && this.AsUTC(portfolioItem.CreationDate)) {
                         item.data.push({
                             x: this.AsUTC(portfolioItem.CreationDate),
                             x2: this.AsUTC(portfolioItem.CreationDate),
@@ -1316,6 +1334,7 @@
                             color: 'black',
                             height: 20,
                             zIndex: 1,
+                            ObjectID: portfolioItem.ObjectID,
                         });
                     }
                     if (this.AsUTC(portfolioItem.ActualStartDate)) {
@@ -1327,6 +1346,7 @@
                             color: 'blue',
                             height: 10,
                             zIndex: 2,
+                            ObjectID: portfolioItem.ObjectID,
                         });
                     }
                     series.push(item);
