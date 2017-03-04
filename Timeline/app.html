@@ -28,7 +28,7 @@
                     afterChartRendered: function (chart) {
                         try {
                             if (chart.chartHeight > me.getHeight()) {
-                                me.setHeight(chart.chartHeight);
+                                me.setHeight(chart.chartHeight * 1.1);
                             }
                         } catch (e) {}
                         // hack to get the chart early 
@@ -204,31 +204,25 @@
                     if (this.label) {
                         this.label.on('click', (function () {
                             this.options.labels.events.click.apply(this, arguments);
+
                         }).bind(this.axis, this.label, series));
                     }
                 }
             };
 
-            H.Chart.prototype.MousePosition = { x: 0, y: 0 };
+            var onContainerPointerMove = H.Pointer.prototype.onContainerPointerMove;
+            H.Pointer.prototype.onContainerPointerMove = function() {
+                try {// keeps throwing errors coz translateMSPointer doesnt always work
+                    onContainerPointerMove.apply(this, arguments);
+                } catch (e){}
+            };
 
-            H.Chart.prototype.captureMousePosition = function() {
-                var IE = document.all ? true : false;
-                if (!IE) document.captureEvents(Event.MOUSEMOVE);
-                document.onmousemove = function getMouseXY(e) {
-                    var tempX, tempY;
-                    if (IE) { 
-                        tempX = event.clientX + document.body.scrollLeft;
-                        tempY = event.clientY + document.body.scrollTop;
-                    } else {  
-                        tempX = e.pageX;
-                        tempY = e.pageY;
-                    }  
-                    if (tempX < 0) { tempX = 0 }
-                    if (tempY < 0) { tempY = 0 } 
-                    H.Chart.prototype.MousePosition = { x: tempX, y: tempY };
-                    return true;
-                };
-            }
+            var onDocumentPointerUp = H.Pointer.prototype.onDocumentPointerUp;
+            H.Pointer.prototype.onDocumentPointerUp = function() {
+                try {// keeps throwing errors coz translateMSPointer doesnt always work
+                    onDocumentPointerUp.apply(this, arguments);
+                } catch (e){}
+            };
         }
 
         function extendHighchartsExport(HC) {
@@ -305,7 +299,6 @@
             extendHighchartsScatter(HC);
             extendHighchartsTooltip(HC);
             extendHighchartsExport(HC);
-            HC.Chart.prototype.captureMousePosition();
         }
 
     })();
@@ -321,7 +314,7 @@
 
             _buildQueryFilter: function (model, settingName) {
                 var queries = [];
-                try {                    
+                try {
                     var setting = this.getSetting(settingName);
                     if (!setting && this.getSettings().query) {
                         var fieldIndex = Ext.Array.map(Ext.Array.filter(this.getSettingsFields(),
@@ -378,7 +371,8 @@
 
                 Deft.Promise.all(
                     [
-                        this._getPortfolioItems(events.scope, config.portfolioItem.type, config.portfolioItem.limit),
+                        this._getPortfolioItems(events.scope, config.portfolioItem.type, config.portfolioItem
+                            .limit),
                         this._getMilestoneItems(events.scope),
                         this._getReleases(events.scope),
                         this._getIterations(events.scope),
@@ -476,7 +470,7 @@
                 return deferred.promise;
             },
 
-            _getRankField: function() {
+            _getRankField: function () {
                 return Rally.getApp().getContext().getWorkspace().WorkspaceConfiguration.DragDropRankingEnabled ?
                     Rally.data.Ranker.RANK_FIELDS.DND :
                     Rally.data.Ranker.RANK_FIELDS.MANUAL;
@@ -490,13 +484,13 @@
                     fetch: ['ObjectID', 'FormattedID', 'DisplayColor', 'Name',
                         'Description', 'PlannedStartDate', 'PlannedEndDate',
                         'ActualStartDate', 'ActualEndDate', 'CreationDate',
-                         this._getRankField(), 'State', 'Predecessors', 'Successors',
-                         'Release','ReleaseDate','ReleaseStartDate','Name',
-                         'LateChildCount','Notes', 'UnEstimatedLeafStoryCount',
-                         'PercentDoneByStoryPlanEstimate', 'PercentDoneByStoryCount',
-                         'LeafStoryPlanEstimateTotal', 'LeafStoryCount',
-                         'DirectChildrenCount', 'AcceptedLeafStoryPlanEstimateTotal',
-                         'AcceptedLeafStoryCount'
+                        this._getRankField(), 'State', 'Predecessors', 'Successors',
+                        'Release', 'ReleaseDate', 'ReleaseStartDate', 'Name',
+                        'LateChildCount', 'Notes', 'UnEstimatedLeafStoryCount',
+                        'PercentDoneByStoryPlanEstimate', 'PercentDoneByStoryCount',
+                        'LeafStoryPlanEstimateTotal', 'LeafStoryCount',
+                        'DirectChildrenCount', 'AcceptedLeafStoryPlanEstimateTotal',
+                        'AcceptedLeafStoryCount'
                     ],
                     context: scope.getContext().getDataContext(),
                     limit: portfoliItemLimit || Infinity,
@@ -528,12 +522,14 @@
             GetDependencies: function (events) {
                 var items = events.config && events.config.items ? events.config.items : [];
                 var queries = [];
-                Ext.Array.forEach(items, function (i) {                    
+                Ext.Array.forEach(items, function (i) {
                     if (i.raw.Successors.Count > 0) {
-                        queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID, 'Predecessors'));
-                    }                    
+                        queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID,
+                            'Predecessors'));
+                    }
                     if (i.raw.Predecessors.Count > 0) {
-                        queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID, 'Successors'));
+                        queries.push(this._getPortfolioItemDependencies(events.scope, i.raw.ObjectID,
+                            'Successors'));
                     }
                 }, this);
                 Deft.Promise.all(queries).then({
@@ -607,18 +603,18 @@
 
             chart: null,
             dataLoader: null,
-            data: null, 
+            data: null,
 
-            dependencyMarker:  '' +
-                                        '      <marker id="dependencyMarker" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse" style="overflow:visible"> ' +
-                                        '          <path d="M0,0 L0,6 L9,3 z" fill="#660066" /> ' +
-                                        '      </marker> ',
+            dependencyMarker: '' +
+                '      <marker id="dependencyMarker" markerWidth="10" markerHeight="10" refX="0" refY="3" orient="auto-start-reverse" markerUnits="userSpaceOnUse" style="overflow:visible"> ' +
+                '          <path d="M0,0 L0,6 L9,3 z" fill="#660066" /> ' +
+                '      </marker> ',
 
-            unknownMarker:       '' +
-                                           '    <marker id="unknownMarker" markerWidth="4" markerHeight="4" refX="2" refY="2" markerUnits="userSpaceOnUse"> ' +
-                                           '         <circle cx="2" cy="2" r="2" fill="#660066" /> ' +
-                                           '    </marker> ',
-            
+            unknownMarker: '' +
+                '    <marker id="unknownMarker" markerWidth="8" markerHeight="8" refX="4" refY="4" markerUnits="userSpaceOnUse"> ' +
+                '         <circle cx="4" cy="4" r="8" fill="#660066" /> ' +
+                '    </marker> ',
+
 
             getOptions: function () {
                 return [{
@@ -629,7 +625,7 @@
             },
 
             config: {
-                defaultSettings: {                    
+                defaultSettings: {
                     'Portfolio Item Type': 'PortfolioItem/Feature',
                     'query': [
                         "", // PortfolioItem
@@ -637,7 +633,7 @@
                         "(Project.ObjectID = {projectOid})", // Release
                         "(Project.ObjectID = {projectOid})" // Iteration
                     ].join(','),
-                    'PortfolioItemFilter' : 0,
+                    'PortfolioItemFilter': 0,
                 }
             },
 
@@ -648,13 +644,12 @@
                     storeConfig: {
                         fields: ['value', 'range'],
                         data: [{
-                                'value': 'PortfolioItem/Feature',
-                                'range': 'Feature'
-                            }, {
-                                'value': 'PortfolioItem/Portfolio',
-                                'range': 'Portfolio'
-                            }
-                        ]
+                            'value': 'PortfolioItem/Feature',
+                            'range': 'Feature'
+                        }, {
+                            'value': 'PortfolioItem/Portfolio',
+                            'range': 'Portfolio'
+                        }]
                     },
                     storeType: 'Ext.data.Store',
                     fieldLabel: 'Portfolio Item Type',
@@ -667,7 +662,7 @@
                     },
                     type: 'query'
                 }, {
-                    name: 'PortfolioItemLimit', 
+                    name: 'PortfolioItemLimit',
                     xtype: 'rallynumberfield',
                     value: this.getSetting('PortfolioItemLimit'),
                     config: {
@@ -760,27 +755,29 @@
                             var app = Rally.getApp();
                             var chartHC = app.chart.down('highchart').chart;
 
-                            var dependencyMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                            var dependencyMarker = document.createElementNS(
+                                'http://www.w3.org/2000/svg', 'marker');
                             dependencyMarker.innerHTML += app.dependencyMarker;
                             chartHC.renderer.defs.element.appendChild(dependencyMarker);
 
-                            var unknownMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                            var unknownMarker = document.createElementNS(
+                                'http://www.w3.org/2000/svg', 'marker');
                             unknownMarker.innerHTML += app.unknownMarker;
                             chartHC.renderer.defs.element.appendChild(unknownMarker);
-                                                        
+
                             app._getDependencies.apply(app, [portfolioItems]);
-                            app._fixYAxisLabels.apply(app, arguments);                              
+                            app._fixYAxisLabels.apply(app, arguments);
                         },
                         scope: this,
                     }
-                });                
+                });
 
                 this.add(this.chart);
             },
 
             pop: null,
 
-            showTooltip: function(event, type) {
+            showTooltip: function (event, type) {
                 if (type === 'Timebox') {
                     var chart = this.axis.chart;
                     if (!chart.lbl) {
@@ -789,19 +786,19 @@
                                 padding: 10,
                                 r: 10,
                                 fill: 'white',
-                            }).css({ 
+                            }).css({
                                 color: '#666'
                             }).add();
-                    }                    
-                    var text = '<br><b>' + (this.options.isIteration ? 'Iteration' : 'Release') + 
-                            ': ' + this.label.text + 
-                            ' (' + new Date(this.options.from).toLocaleDateString('en-AU') + 
-                            '-' + new Date(this.options.to).toLocaleDateString('en-AU') + ')</b>';
+                    }
+                    var text = '<br><b>' + (this.options.isIteration ? 'Iteration' : 'Release') +
+                        ': ' + this.label.text +
+                        ' (' + new Date(this.options.from).toLocaleDateString('en-AU') +
+                        '-' + new Date(this.options.to).toLocaleDateString('en-AU') + ')</b>';
                     chart.lbl
                         .show()
                         .attr({
                             text: text,
-                        });                            
+                        });
                 } else if (type === 'PortfolioItem') {
                     var records = Ext.Array.filter(this.data, function (record) {
                         return record.raw.ObjectID === event.currentTarget.ObjectID;
@@ -813,18 +810,19 @@
                     this.pop = Rally.ui.popover.PopoverFactory.bake({
                         field: 'PercentDoneByStoryPlanEstimate',
                         //type: this.getSetting('Portfolio Item Type'),
-                        oid: record.raw.ObjectID, 
+                        oid: record.raw.ObjectID,
                         record: record,
-                        target: Ext.Element.get(event.currentTarget.graphic.element) || Ext.Element.getActiveElement(),
+                        target: Ext.Element.get(event.currentTarget.graphic.element) || Ext.Element
+                            .getActiveElement(),
                         percentDoneData: record.data,
                         percentDoneName: "PercentDoneByStoryCount",
                         piRef: record.data._ref,
                         viewportPadding: [15, 25, 15, 215]
                     });
                 }
-            }, 
-            
-            hideTooltip: function() {
+            },
+
+            hideTooltip: function () {
                 if (this.pop) {
                     this.pop.hide();
                     this.pop.destroy();
@@ -835,7 +833,7 @@
                     //this.axis.chart.lbl = null;
                     this.axis.chart.lbl.hide();
                 }
-            },             
+            },
 
             _fixYAxisLabels: function () {
                 // Not sure why but sometimes the x and y of the label was not set correctly.
@@ -855,12 +853,28 @@
                     that.onDependencyCheckboxChange.apply(that, [dependencies, dependencies.value]);
                 };
 
+                function hexToRgbA(hex, alpha){
+                    var c;
+                    if(/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)){
+                        c= hex.substring(1).split('');
+                        if(c.length== 3){
+                            c= [c[0], c[0], c[1], c[1], c[2], c[2]];
+                        }
+                        c= '0x'+c.join('');
+                        return 'rgba('+[(c>>16)&255, (c>>8)&255, c&255].join(',')+',' + alpha + ')';
+                    }
+                    throw new Error('Bad Hex');
+                }
+
                 var ticks = chart.axes[1].ticks;
                 if (!ticks) return;
                 for (var t in ticks) {
-                    var label = ticks[t].label;
+                    var tick = ticks[t];
+                    var label = tick.label;
                     if (!label) continue;
-                    label.element.setAttribute("labelFor", ticks[t].axis.series[ticks[t].pos].options.id);
+                    var s = ticks[t].axis.series[ticks[t].pos];
+                    label.element.setAttribute("labelfor", s.options.ObjectID);
+                    label.element.setAttribute("z", 20);  
                     if (label.x != label.xy.x) {
                         label.element.setAttribute("x", label.xy.x);
                         for (var i = 0; i < label.element.childElementCount; i++) {
@@ -875,6 +889,20 @@
                         }
                         label.y = label.xy.y;
                     }
+                    
+                    if (s.options.DisplayColor && s.options.DisplayColor !== '#FFFFFF') {
+                        var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                        rect.setAttribute('x', '0');
+                        rect.setAttribute('y', tick.gridLine.getBBox().y - 1);
+                        rect.setAttribute('z', 19);
+                        rect.setAttribute('height', tick.axis.height / tick.axis.max);
+                        rect.setAttribute('width', tick.getPosition().x);
+                        rect.setAttribute("fill", hexToRgbA(s.options.DisplayColor, 0.2));
+                        rect.setAttribute("labelfor", s.options.ObjectID);
+                        label.element.parentElement.appendChild(rect);
+                        Ext.get(rect).on('click', tick.axis.chart.yAxis[0].options.labels.events.click);
+                        //label.element.relayEvents(rect, ['click']);
+                    }
                 }
             },
 
@@ -882,7 +910,7 @@
                 var chart = this.chart.down('highchart').chart;
                 var pairs = [];
 
-                pairs.ExistsAlready = function(point) {
+                pairs.ExistsAlready = function (point) {
                     var existingLine = Ext.Array.filter(this, function (i) {
                         return ((i.startX === point.startX && i.startY === point.startY &&
                                 i.endX === point.endX && i.endY === point.endY) ||
@@ -896,62 +924,77 @@
                 function createPoint(start, end, type, color, id, markerEnd, markerStart) {
                     var startX = start.plotX + chart.plotBox.x;
                     var startY = start.plotY + chart.plotBox.y;
-
                     var endX = end.plotX + chart.plotBox.x;
                     var endY = end.plotY + chart.plotBox.y;
 
                     var isPredecessor = type === 'Predecessors';
-                    if (isPredecessor) {
-                        startX += start.shapeArgs.width;
+                    if (start === end) {
+                        if (isPredecessor) {
+                            startX -= 30;
+                            startY -= 10;
+                            endX -= 10;
+                        } else {
+                            startX += start.shapeArgs.width + 30;
+                            startY -= 10;
+                            endX += end.shapeArgs.width;
+                        }
                     } else {
-                        endX += end.shapeArgs.width;
+                        if (isPredecessor) {
+                            startX += start.shapeArgs.width;
+                        } else {
+                            endX += end.shapeArgs.width;
+                        }
                     }
-
                     return {
                         startX: startX,
                         startY: startY,
                         endX: endX,
                         endY: endY,
                         moveTo: ['M', startX, startY],
-                        draw: ['L', endX, endY], 
-                        config: { 
+                        draw: ['L', endX, endY],
+                        config: {
                             'stroke-width': 2,
                             stroke: color,
                             id: id,
                             class: 'dependency',
                             type: type,
                             zIndex: 30,
-                            'marker-end' : markerEnd || 'none',
-                            'marker-start' : markerStart || 'none',
+                            'marker-end': markerEnd || 'none',
+                            'marker-start': markerStart || 'none',
                         }
                     }
                 }
 
                 function FindByID(id) {
                     var p1 = Ext.Array.filter(chart.series, function (s) {
-                        return s.options.id === id;
+                        return s.options.ObjectID === id;
                     }, this);
-                    if (p1) {                    
+                    if (p1 && p1[0] && p1[0].data && p1[0].data[0]) {
                         return p1[0].data[0];
                     }
                 }
 
                 Ext.Array.forEach(dependencies, function (v) {
                     var start = FindByID(v.item);
+                    if (!start) return;
                     // dependency not in the queryable list
                     if (v.records.length === 0) {
-                        var point = createPoint(start, start, v.type, '#660066', 'dependency-' + v.item + '-UNKNOWN-', 'url(#dependencyMarker)', 'url(#unknownMarker)');
+                        var point = createPoint(start, start, v.type, '#660066', 'dependency-' +
+                            v.item + '-UNKNOWN-', 'url(#dependencyMarker)',
+                            'url(#unknownMarker)');
                         if (!pairs.ExistsAlready(point)) {
-                            pairs.push(point); 
+                            pairs.push(point);
                         }
                     }
                     Ext.Array.forEach(v.records, function (r) {
                         var end = FindByID(r.raw.ObjectID) || start;
-	                    var point = createPoint(start, end, v.type, '#660066', 'dependency-' + v.item + '-' + end.category + '-', 'url(#dependencyMarker)', 'url(#dependencyMarker)');
+                        var point = createPoint(start, end, v.type, '#660066',
+                            'dependency-' + v.item + '-' + end.category + '-',
+                            'url(#dependencyMarker)', 'url(#dependencyMarker)');
                         // check if a line already exists so we dont draw two - we use a double headed arrow  
                         if (!pairs.ExistsAlready(point)) {
                             pairs.push(point);
-                        }   
+                        }
                     }, this);
                 }, this);
 
@@ -993,19 +1036,19 @@
                 this.dataLoader.LoadData({
                     success: function (values) {
                         var success = values[0] && values[1] && values[2] && values[3];
-                        this._updateChart(success, values[0], values[1], [].concat(values[2], values[3]));
+                        this._updateChart(success, values[0], values[1], [].concat(values[2],
+                            values[3]));
                         this._hideMask();
                     },
                     failure: function (error) {
                         this._showMask(error);
                     },
                     scope: this
-                },
-                { 
+                }, {
                     portfolioItem: {
                         type: this.getSetting('Portfolio Item Type'),
                         limit: Ext.Number.from(this.getSetting('PortfolioItemLimit'), undefined),
-                    },             
+                    },
                 });
             },
 
@@ -1118,6 +1161,24 @@
                 this.add(dependenciesCheck);
             },
 
+            _yAxisLabelClick: function (label, series, evt) {
+                // open item
+                var context = Rally.environment.getContext();
+                var currentProjectOid = Rally.util.Ref.getOidFromRef(context.getProject()._ref);
+                var type = Rally.getApp().getSetting('Portfolio Item Type');
+                var objectID;
+                try { objectID = this.getAttribute('labelfor'); }
+                catch (e) { objectID = label.element.getAttribute("labelfor"); }
+                if (objectID === "undefined") objectID = undefined;
+                if (!objectID) return;
+                var url = '/#/' 
+                    + Rally.environment.getContext().getScopeStr(null) 
+                    + '/detail' 
+                    + Rally.util.Ref.getRefFromTypeAndOid(type, objectID);
+                console.log(url);
+                window.top.document.location = url;
+            },
+
             _chartConfig: function (plotBands, categories, series) {
                 var rowHeight = 32;
                 var height = ((series.length + 2) * rowHeight);
@@ -1134,21 +1195,12 @@
                     }
                 }
 
-                function tooltipFormatter() {
-                    return '<span><b>' + this.point.series.name + '</b>' + '</span><br>' +
-                        '<span>' + 'From:' + new Date(this.x).toLocaleDateString('en-AU') +
-                        '</span><br>' +
-                        (this.x2 ? '<span>' + 'To:' + new Date(this.x2).toLocaleDateString('en-AU') +
-                            '</span><br>' : '') +
-                        '<span>' + this.point.label.replace(/<div>/i, '<br>').replace(/&nbsp;/gi, ' ').replace(
-                            /<div>/gi, '<span>').replace(/<\/div>/gi, "</span><br>") + '</span>';
-                }
-
                 return {
                     chart: {
                         type: 'xrange',
                         zoomType: 'x',
                         height: height,
+                        spacingLeft: 170,
                     },
                     title: {
                         text: 'Timeline'
@@ -1156,7 +1208,7 @@
                     xAxis: {
                         opposite: true,
                         type: 'datetime',
-                        tickInterval: 7 * 24 * 3600 * 1000,
+                        minTickInterval: 7 * 24 * 3600 * 1000,
                         maxZoom: 7 * 24 * 3600 * 1000,
                         labels: {
                             formatter: function () {
@@ -1172,15 +1224,13 @@
                         }],
                         plotBands: Ext.Array.filter(plotBands, function (pb) {
                             pb.events = {
-                                click: function(event) {                                  
-                                    //Ext.defer(function(event) {
-                                        Rally.getApp().showTooltip.apply(this, [event, 'Timebox']);
-                                    //}, 200, this, [event]);
+                                click: function (event) {
+                                    Rally.getApp().showTooltip.apply(this, [event,
+                                        'Timebox'
+                                    ]);
                                 },
-                                mouseout: function() {
-                                    //Ext.defer(function() {
-                                        Rally.getApp().hideTooltip.apply(this, arguments);
-                                    //}, 200, this, arguments);
+                                mouseout: function () {
+                                    Rally.getApp().hideTooltip.apply(this, arguments);
                                 },
                             };
                             return pb;
@@ -1190,6 +1240,7 @@
                         title: 'Items',
                         tickInterval: 1,
                         tickmarkPlacement: 'between',
+                        margin: 20,
                         categories: categories,
                         labels: {
                             style: {
@@ -1201,27 +1252,13 @@
                             },
                             formatter: function () {
                                 var label = this.axis.defaultLabelFormatter.call(this);
-                                if (label.length > 45) {
-                                    label = label.substring(0, 45) + '\u2026';
-                                }
-                                return label;
+                                return label.length > 45 ? label.substring(0, 45) +
+                                    '\u2026' : label;
                             },
                             align: 'left',
-                            x: 0,
+                            x: -170,
                             events: {
-                                click: function (label, series, evt) {
-                                    // open item
-                                    var context = Rally.environment.getContext();
-                                    var currentProjectOid = Rally.util.Ref.getOidFromRef(
-                                        context.getProject()._ref);
-                                    var objectID = label.element.getAttribute("labelFor");
-                                    var url = '/#/' + Rally.environment.getContext().getScopeStr(
-                                        null) + '/detail' + Rally.util.Ref.getRefFromTypeAndOid(
-                                        Rally.getApp().getSetting('Portfolio Item Type'),
-                                        objectID);
-                                    console.log(url);
-                                    window.top.document.location = url;
-                                },
+                                click: this._yAxisLabelClick,
                             },
                         },
                     }, {
@@ -1242,17 +1279,19 @@
                             point: {
                                 events: {
                                     click: function (event) {
-                                        Ext.defer(function(event) {
-                                            this.showTooltip.apply(this, [event, 'PortfolioItem']);
-                                        },  200, Rally.getApp(), [event]);
+                                        Ext.defer(function (event) {
+                                            this.showTooltip.apply(this, [event,
+                                                'PortfolioItem'
+                                            ]);
+                                        }, 200, Rally.getApp(), [event]);
                                     }
                                 }
                             },
                             events: {
                                 mouseOut: function () {
-                                    Ext.defer(function() {
+                                    Ext.defer(function () {
                                         this.hideTooltip.apply(this, arguments);
-                                    },  200, Rally.getApp(), arguments);
+                                    }, 200, Rally.getApp(), arguments);
                                 }
                             },
                         }
@@ -1272,13 +1311,26 @@
             _createPlotbandsFromTimeboxes: function (timeboxes) {
                 // restructure the timeboxes
                 var plotBands = [];
+                var steps = Math.round(timeboxes.length / 1);
+                var frequency = 2 * Math.PI / steps,
+                    phase1 = 0,
+                    phase2 = 2,
+                    phase3 = 4,
+                    center = 200;
+                var width = 255 - center;
+
                 Ext.each(timeboxes, function (tb) {
                     var timebox = tb.raw;
                     var isIteration = timebox._type === 'Iteration';
+
+                    var i = plotBands.length % 2 === 0 ? plotBands.length + 1 : timeboxes.length - plotBands.length;
+                    var red = Math.round(Math.sin(frequency * i + phase1) * width + center);
+                    var grn = Math.round(Math.sin(frequency * i + phase2) * width + center);
+                    var blu = Math.round(Math.sin(frequency * i + phase3) * width + center);
+                    var color = 'rgba(' + red + ', ' + grn + ', ' + blu + ', 0.25)';
+
                     plotBands.push({
-                        color: timebox.DisplayColor ? timebox.DisplayColor :
-                            (isIteration ? 'rgba(255, 255, 0, 0.2)' :
-                                'rgba(68, 170, 213, .2)'),
+                        color: color,
                         from: this.AsUTC(timebox.StartDate || timebox.ReleaseStartDate),
                         to: this.AsUTC(timebox.EndDate || timebox.ReleaseDate),
                         zIndex: isIteration ? 1 : 0,
@@ -1291,10 +1343,12 @@
                                 theme: timebox.Theme,
                                 type: timebox._type,
                             },
+                            borderColor: '#666',
+                            borderWidth: 1,
                             style: {
                                 color: '#666',
                             },
-                            zIndex: 10,
+                            zIndex: isIteration ? 11 : 10,
                         },
                     });
                 }, this);
@@ -1311,6 +1365,7 @@
                         yAxis: 0,
                         name: portfolioItem.Name,
                         ObjectID: portfolioItem.ObjectID,
+                        DisplayColor: portfolioItem.DisplayColor,
                         data: []
                     };
                     if (this.AsUTC(portfolioItem.PlannedStartDate) && this.AsUTC(portfolioItem.PlannedEndDate)) {
