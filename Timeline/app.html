@@ -778,8 +778,7 @@
             pop: null,
 
             showTooltip: function (event, type) {
-                if (type === 'Timebox') {
-                    var chart = this.axis.chart;
+                function ensureLbl(chart) {
                     if (!chart.lbl) {
                         chart.lbl = chart.renderer.label('')
                             .attr({
@@ -790,23 +789,30 @@
                                 color: '#666'
                             }).add();
                     }
+                    return chart;
+                }
+                if (type === 'Milestone') {
+                    var chart = this.chart.down('highchart').chart;
+                    if (!chart) return;
+                    var date = event.currentTarget.series.options.data[0].x;
+                    if (!date) return;
+                    var text = '<br><b>Milestone: ' + 
+                        event.currentTarget.series.options.name +
+                        ' (' + new Date(date).toLocaleDateString('en-AU') + ')</b>';
+                    ensureLbl(chart).lbl.show().attr({text: text});
+                } else if (type === 'Timebox') {
+                    var chart = this.axis.chart;  
                     var text = '<br><b>' + (this.options.isIteration ? 'Iteration' : 'Release') +
                         ': ' + this.label.text +
                         ' (' + new Date(this.options.from).toLocaleDateString('en-AU') +
                         '-' + new Date(this.options.to).toLocaleDateString('en-AU') + ')</b>';
-                    chart.lbl
-                        .show()
-                        .attr({
-                            text: text,
-                        });
-                } else if (type === 'PortfolioItem') {
+                    ensureLbl(chart).lbl.show().attr({text: text});
+                } else if (type === 'Items') {
                     var records = Ext.Array.filter(this.data, function (record) {
                         return record.raw.ObjectID === event.currentTarget.ObjectID;
                     });
                     if (records.length === 0) return;
-
                     var record = records[0];
-
                     this.pop = Rally.ui.popover.PopoverFactory.bake({
                         field: 'PercentDoneByStoryPlanEstimate',
                         //type: this.getSetting('Portfolio Item Type'),
@@ -1056,13 +1062,41 @@
                 return portfolioItem.raw.FormattedID + ': ' + portfolioItem.raw.Name;
             },
 
+            _informationButtonClick: function() {
+                var that = this;
+
+                Ext.create('Rally.ui.dialog.Dialog', {
+                    autoShow: true,
+                    draggable: true,
+                    closable: true,
+                    width: 400,
+                    title: 'Information',
+                    items: {
+                        xtype: 'component',
+                        html: '' + 
+                            '<div style="width: 100%;">' +
+                            '<div>Choose either Portfolio Item or Features</div>' +
+                            '<div>Red = planned</div>' +
+                            '<div>Blue = actual</div>' +
+                            '<div>Black = no planned dates enter, so created date used</div>' +
+                            '</div>',
+                        padding: 10
+                    },
+                    listeners: {
+                        close: function (e, o) {
+                            that._showMask("Refreshing...");
+                            that._loadData.apply(that);
+                        }
+                    }
+                });
+            },
+
             _addButton: function () {
                 var that = this;
                 var button = Ext.create('Rally.ui.Button', {
                     text: 'Information',
                     handler: function () {
-                        that._showMask("Refreshing...");
-                        that._loadData.apply(that);
+                        that._informationButtonClick.apply(that, arguments);
                     },
                     style: {
                         position: 'absolute',
@@ -1262,11 +1296,11 @@
                             },
                         },
                     }, {
-                        title: 'Items',
+                        title: 'Milestone',
                         gridLineColor: 'transparent',
                         labels: {
                             enabled: false,
-                        }
+                        },
                     }],
                     legend: {
                         enabled: false,
@@ -1281,7 +1315,7 @@
                                     click: function (event) {
                                         Ext.defer(function (event) {
                                             this.showTooltip.apply(this, [event,
-                                                'PortfolioItem'
+                                                event.currentTarget.series.yAxis.userOptions.title
                                             ]);
                                         }, 200, Rally.getApp(), [event]);
                                     }
@@ -1291,7 +1325,7 @@
                                 mouseOut: function () {
                                     Ext.defer(function () {
                                         this.hideTooltip.apply(this, arguments);
-                                    }, 200, Rally.getApp(), arguments);
+                                    }, 5000, Rally.getApp(), arguments);
                                 }
                             },
                         }
