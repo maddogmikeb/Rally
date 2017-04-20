@@ -102,8 +102,12 @@
             var theme = wrapStart + 'No theme defined' + wrapEnd;
             if (record.raw.Theme !== undefined) {
                 if (record.data.Theme !== '') {
-                    var fonter = new RegExp('<'+'font'+'[^><]*>|<.'+'font'+'[^><]*>','g');
-                    theme = wrapStart + record.data.Theme.replace(fonter, '') + wrapEnd;                  
+                    if (style.fontSize !== 'inherit') {
+                        var fonter = new RegExp('<'+'font'+'[^><]*>|<.'+'font'+'[^><]*>','g');
+                        theme = wrapStart + record.data.Theme.replace(fonter, '') + wrapEnd;                  
+                    } else {
+                        theme = wrapStart + record.data.Theme + wrapEnd;                  
+                    }
                 }
             } else {
                 // theme was not loaded 
