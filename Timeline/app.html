@@ -713,7 +713,7 @@
                     type: 'image/png',
                 });
 
-                this._loadData.apply(this);
+                this._loadData.apply(this);                
             },
 
             _updateChart: function (success, portfolioItems, milestones, timeboxes) {
@@ -1013,7 +1013,7 @@
             },
 
             _getDependencies: function (portfolioItems) {
-                this.onDependencyCheckboxChange.apply(this, [null, false]);
+                this.onDependencyCheckboxChange.apply(this, [null, false]);                
 
                 var items = Ext.Array.filter(portfolioItems, function (i) {
                     return (i.raw.Predecessors.Count > 0 || i.raw.Successors.Count > 0);
@@ -1131,6 +1131,28 @@
                 }
             },
 
+            onNoPlannedCheckboxChange: function (checkBox, newValue) {
+                var app = Rally.getApp();
+                if (app.chart.down('highchart').chart) {
+                    Ext.Array.each(app.chart.down('highchart').chart.renderer.box.getElementsByTagName("rect"),
+                        function (rect) {
+                            if (rect.attributes['fill'] && rect.attributes['fill'].value === 'black')
+                                rect.style.visibility = newValue ? "visible" : "hidden";
+                        }, app);
+                }
+            },
+
+            onActualsCheckboxChange: function (checkBox, newValue) {
+                var app = Rally.getApp();
+                if (app.chart.down('highchart').chart) {
+                    Ext.Array.each(app.chart.down('highchart').chart.renderer.box.getElementsByTagName("rect"),
+                        function (rect) {
+                            if (rect.attributes['fill'] && rect.attributes['fill'].value === 'blue')
+                                rect.style.visibility = newValue ? "visible" : "hidden";
+                        }, app);
+                }
+            },
+
             onDependencyCheckboxChange: function (checkBox, newValue) {
                 var app = Rally.getApp();
                 if (app.chart.down('highchart').chart) {
@@ -1193,6 +1215,40 @@
                     }
                 });
                 this.add(dependenciesCheck);
+
+                var actualsCheck = Ext.create('Rally.ui.CheckboxField', {
+                    fieldLabel: 'Show Actuals',
+                    value: true,
+                    listeners: {
+                        change: this.onActualsCheckboxChange,
+                    },
+                    labelAlign: 'right',
+                    style: {
+                        position: 'absolute',
+                        top: 0,
+                        left: 470,
+                        width: '80px',
+                        'z-index': 199
+                    }
+                });
+                this.add(actualsCheck);
+
+                var noPlannedCheck = Ext.create('Rally.ui.CheckboxField', {
+                    fieldLabel: 'Show No Planned',
+                    value: true,
+                    listeners: {
+                        change: this.onNoPlannedCheckboxChange,
+                    },
+                    labelAlign: 'right',
+                    style: {
+                        position: 'absolute',
+                        top: 0,
+                        left: 590,
+                        width: '80px',
+                        'z-index': 199
+                    }
+                });
+                this.add(noPlannedCheck);
             },
 
             _yAxisLabelClick: function (label, series, evt) {
@@ -1419,6 +1475,7 @@
                             color: 'red',
                             height: 20,
                             zIndex: 1,
+                            class: 'planned',
                             ObjectID: portfolioItem.ObjectID,
                         });
                     } else if (this.AsUTC(portfolioItem.CreationDate) && this.AsUTC(portfolioItem.CreationDate)) {
@@ -1431,6 +1488,7 @@
                             color: 'black',
                             height: 20,
                             zIndex: 1,
+                            class: 'noDates',
                             ObjectID: portfolioItem.ObjectID,
                         });
                     }
@@ -1443,6 +1501,7 @@
                             color: 'blue',
                             height: 10,
                             zIndex: 2,
+                            class: 'actuals',
                             ObjectID: portfolioItem.ObjectID,
                         });
                     }
