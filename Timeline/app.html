@@ -1264,7 +1264,9 @@
                                     ]);
                                 },
                                 mouseout: function () {
-                                    Rally.getApp().hideTooltip.apply(this, arguments);
+                                    Ext.defer(function () {
+                                        this.hideTooltip.apply(this, arguments);
+                                    }, 5000, Rally.getApp(), arguments);
                                 },
                             };
                             return pb;
@@ -1357,7 +1359,13 @@
                     var timebox = tb.raw;
                     var isIteration = timebox._type === 'Iteration';
 
-                    var i = plotBands.length % 2 === 0 ? plotBands.length + 1 : timeboxes.length - plotBands.length;
+                    var i;
+                    if (timeboxes.length % 4 === 0) { // otherwise 4224 and colours are beside each other
+                        i = plotBands.length + 1;
+                    } else {
+                        i = plotBands.length % 2 === 0 ? plotBands.length + 1 : timeboxes.length - plotBands.length + 1;
+                    }
+
                     var red = Math.round(Math.sin(frequency * i + phase1) * width + center);
                     var grn = Math.round(Math.sin(frequency * i + phase2) * width + center);
                     var blu = Math.round(Math.sin(frequency * i + phase3) * width + center);
