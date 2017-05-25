@@ -82,7 +82,7 @@
 
         startDate: null,
         endDate: null,
-        chart: {},
+        panel: {},
         rawData: {},
 
         getSettingsFields: function () {
@@ -236,19 +236,21 @@
                 trend.push(fitter.project(i));
             }
 
-            var hc = this.chart.down('highchart').chart;
-            if (hc) {
-                var cycleTimeDataContainer = hc.series.find(function (a) { return a.name === "Cycle time"; });
-                cycleTimeDataContainer.setData(data);
+            this.panel.items.removeAll(); 
+            this.panel.items.add([
+                        {
+                            xtype: "panel",
+                            html: new Ext.XTemplate("Average: {value}").apply(
+                                {
+                                    value: average
+                                })
+                        }
+                    ]);
+            this.panel.doLayout();
 
-                var trendDataContainer = hc.series.find(function (a) { return a.name === "Trend"; });
-                trendDataContainer.setData(trend);
-
-                var averageDataContainer = hc.series.find(function (a) { return a.name === "Average"; });
-                averageDataContainer.setData(averages);
-
-                hc.redraw();
-            }
+            //cycleTimeDataContainer.setData(data);
+            //trendDataContainer.setData(trend);
+            //averageDataContainer.setData(averages);
 
             Rally.getApp()._updateButtonText(false);
         },
@@ -312,84 +314,6 @@
                 ]
             };
         },      
-
-        _chartClickHandler: function (e) {
-            if (!(this.series.name === "Cycle time")) {
-                return;
-            }
-
-            var options = {
-                weekday: "short", year: "numeric", month: "short",
-                day: "numeric", hour: "2-digit", minute: "2-digit"
-            };
-
-            var records = Rally.getApp().rawData[e.currentTarget.category];
-            var average = 0;
-            var data = [];
-            Ext.each(records, function (rec) {
-                data.push({
-                    'Item': rec,
-                    'First In-Progress': new Date(rec[1]).toLocaleTimeString("en-au", options),
-                    'Final Accepted': new Date(rec[2]).toLocaleTimeString("en-au", options),
-                    'Cycle Time (days)': rec[3].toFixed(1)
-                });
-                average += rec[3];
-            });
-
-            var container = Ext.create('Rally.ui.grid.Grid', {
-                title: 'Average: ' + (average / records.length).toFixed(1),
-                width: '100%',
-                frame: true,
-                store: Ext.create('Rally.data.custom.Store', {
-                    data: data,
-                    pageSize: 5
-                }),
-                pagingToolbarCfg: {
-                    pageSizes: [5, 10, 25]
-                },
-                columnCfgs: [
-                    {
-                        text: 'Item',
-                        dataIndex: 'Item',
-                        renderer: function (rec) {
-                            var link = "/#/detail/userstory/" + rec[0].get('ObjectID');
-                            return Ext.String.format('<a target="_blank" href="{0}">{1}</a>', link, rec[0].get('FormattedID'));
-                        }
-                    },
-                    {
-                        text: 'First In-Progress',
-                        dataIndex: 'First In-Progress'
-                    },
-                    {
-                        text: 'Final Accepted',
-                        dataIndex: 'Final Accepted'
-                    },
-                    {
-                        text: 'Cycle Time (days)',
-                        dataIndex: 'Cycle Time (days)'
-                    }
-                ]
-            });
-
-            Ext.create('Rally.ui.dialog.Dialog', {
-                autoShow: true,
-                draggable: true,
-                closable: true,
-                resizable: true,
-                width: "460px",
-                style: {
-                    'min-width': "460px",
-                },
-                title: 'Stories in week ' + e.currentTarget.category,
-                items: [container],
-                listeners: {
-                    close: function (e, o) {
-                        var app = Rally.getApp();
-                        app.refresh();
-                    }
-                }
-            });
-        },
 
         _getFilters: function () {
             return [
@@ -458,7 +382,8 @@
         },
 
         _updateButtonText: function (isLoading) {
-            var button = Rally.getApp().down('button');
+            var button;
+            try { button = Rally.getApp().down('button'); } catch (e) {}
             if (!button) {
                 return;
             }
@@ -495,13 +420,23 @@
 
             this.add(button);            
 
-            this.chart = Ext.create('Rally.ui.chart.Chart', {
-                loadMask: false,
-                chartData: this._getChartData(),
-                chartConfig: this._getChartConfig()
-            });
+            this.panel = new Ext.Panel({
+                    title: 'Team Scorecard',
+                    header: {
+	                    titleAlign: 'center'
+                    },
+                    items: [
+                        {
+                            xtype: "panel",
+                            html: new Ext.XTemplate("<a href='#'>{value}").apply(
+                                {
+                                    value: '2. HTML property of a panel generated by an XTemplate'
+                                })
+                        }
+                    ]
+                });
 
-            this.add(this.chart);
+            this.add(this.panel);
         }
     });
 
