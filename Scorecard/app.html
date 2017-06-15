@@ -76,14 +76,16 @@
                 'Starting Scheduled State': 'In-Progress',
                 'End Scheduled State': 'Accepted',
                 'Show Trend Line': true,
-                'Show Average Line': true
+                'Show Average Line': true, 
+                'Baseline Start Date': new Date(2016, 8, 1), // Sep 16 
+                'Baseline End Date': new Date(2017, 5, 1) // June 17 
             }
         },
 
         startDate: null,
         endDate: null,
         panel: {},
-        rawData: {},
+        // rawData: {},
 
         getSettingsFields: function () {
             return [
@@ -120,7 +122,15 @@
             return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m);
         },
 
-        _loadData: function (store, records, success) {
+        _dateToYMD2: function (date) {
+            var d = date.getDate();
+            var m = date.getMonth() + 1;
+            var y = date.getFullYear();
+            //return y + '-' + (m <= 9 ? '0' + m : m) + '-' + (d <= 9 ? '0' + d : d);
+            return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m) + '/' + y;
+        },
+
+        _loadData: function (store, records, success, isBaseline) {
             console.log("Loading data for RealCycleTime app (" + success + ")");
 
             if (!success) return;
@@ -193,20 +203,20 @@
 
                     if (bins.hasOwnProperty(date)) {
                         bins[date].push(cycleTime);
-                        var key = this._dateToYMD(new Date(date));
-                        if (this.rawData[key] == null) {
-                            this.rawData[key] = [];
-                        }
-                        this.rawData[key].push([lastAccepted, progressValidFrom, acceptedValidFrom, (cycleTime / 24)]);
+                        // var key = this._dateToYMD(new Date(date));
+                        // if (this.rawData[key] == null) {
+                        //     this.rawData[key] = [];
+                        // }
+                        // this.rawData[key].push([lastAccepted, progressValidFrom, acceptedValidFrom, (cycleTime / 24)]);
                     }
                 }
 
             }, this);
 
-            this._updateChart(bins);
+            this._updateChart(bins, isBaseline);
         },
 
-        _updateChart: function (bins) {
+        _updateChart: function (bins, isBaseline) {
             var that = this;
             var totalSum = 0;
             var fitter = new LineFitter();
@@ -236,86 +246,61 @@
                 trend.push(fitter.project(i));
             }
 
-            this.panel.items.removeAll(); 
-            this.panel.items.add([
-                        {
-                            xtype: "panel",
-                            html: new Ext.XTemplate("Average: {value}").apply(
-                                {
-                                    value: average
-                                })
-                        }
-                    ]);
-            this.panel.doLayout();
+            var averageFormat = average ? average.toFixed(2) : '0.00';
+            var trendFormat = -1 * (trend[0] - trend[trend.length - 1]) > 1 ? '&uarr;' : -1 * (trend[0] - trend[trend.length - 1]) < -1  ? '&darr;' : '&harr';
+            var from = this._dateToYMD2(isBaseline ? this.getSetting('Baseline Start Date') : this.startDate);
+            var to = this._dateToYMD2(isBaseline ? this.getSetting('Baseline End Date'): this.endDate);
 
-            //cycleTimeDataContainer.setData(data);
-            //trendDataContainer.setData(trend);
-            //averageDataContainer.setData(averages);
+            if (isBaseline) 
+            {
+                this.panel.items.items[0].update(new Ext.XTemplate("Baseline ({from} to {to}):<h1>Average: {average} {trend}</h1>").apply(
+                            {
+                                from: from, 
+                                to: to, 
+                                average: averageFormat, 
+                                trend: trendFormat
+                            }));
+            } else {
+                this.panel.items.items[1].update(new Ext.XTemplate("Current ({from} to {to}):<h1>Average: {average} {trend}</h1>").apply(
+                            {
+                                from: from, 
+                                to: to, 
+                                average: averageFormat, 
+                                trend: trendFormat
+                            }));
+            }
 
             Rally.getApp()._updateButtonText(false);
         },
 
-        _getChartData: function () {
-
-            Rally.getApp()._updateButtonText(true);
+        _getChartData: function (isBaseline) {
+            var that = Rally.getApp();
+            
+            that._updateButtonText(true);
 
             Ext.create('Rally.data.lookback.SnapshotStore', {
                 listeners: {
-                    load: this._loadData,
-                    scope: this
+                    load: function (store, records, success) {
+                        that._loadData(store, records, success, isBaseline);
+                    },
+                    scope: that
                 },
-                context: this._getContext(),
+                context: that._getContext(),
                 removeUnauthorizedSnapshots: true,
                 autoLoad: true,
                 compress: true,
                 limit: 'Infinity',
                 fetch: ['_ValidFrom', '_ValidTo', 'AcceptedDate', 'ScheduleState', '_PreviousValues.ScheduleState', 'FormattedID'],
                 hydrate: ['ScheduleState', '_PreviousValues.ScheduleState'],
-                filters: this._getFilters(),
+                filters: that._getFilters(isBaseline),
                 sorters: [{
                     property: '_ValidTo',
                     direction: 'ASC'
                 }]
             });
-
-            var currentNumWeeks = parseInt(this.getSetting('Number of Weeks'));
-
-            var categories = [];
-            var date = new Date(this.startDate);
-            for (var idx = 0; idx < currentNumWeeks; idx++) {
-                categories.push(this._dateToYMD(date));
-                date = Rally.util.DateTime.add(date, "day", 7);
-            }
-
-            return {
-                categories: categories,
-                series: [
-                    {
-                        type: 'line',
-                        name: 'Average',
-                        dashStyle: 'ShortDot',
-                        id: 'averages'
-                    },
-                    {
-                        type: 'line',
-                        name: 'Trend',
-                        dashStyle: 'Dash',
-                        marker: {
-                            enabled: false
-                        },
-                        id: 'trend'
-                    },
-                    {
-                        type: 'spline',
-                        name: 'Cycle time',
-                        id: 'primary',
-                        connectNulls: true
-                    }
-                ]
-            };
         },      
 
-        _getFilters: function () {
+        _getFilters: function (isBaseline) {
             return [
                 {
                     property: '_ProjectHierarchy',
@@ -324,12 +309,16 @@
                 {
                     property: '_ValidFrom',
                     operator: '$gte',
-                    value: Rally.util.DateTime.toIsoString(Rally.util.DateTime.add(this.startDate, "month", -2)) /// go back a bit further to ensure that we get an accurate count for the first week
+                    value: isBaseline ? 
+                              Rally.util.DateTime.toIsoString(Rally.util.DateTime.add(this.getSetting('Baseline Start Date'), "month", -2)) /// go back a bit further to ensure that we get an accurate count for the first week
+                            : Rally.util.DateTime.toIsoString(Rally.util.DateTime.add(this.startDate, "month", -2)) /// go back a bit further to ensure that we get an accurate count for the first week
                 },
                 {
                     property: '_ValidFrom',
                     operator: '$lte',
-                    value: Rally.util.DateTime.toIsoString(this.endDate)
+                    value: isBaseline ? 
+                              Rally.util.DateTime.toIsoString(this.getSetting('Baseline End Date'))
+                            : Rally.util.DateTime.toIsoString(this.endDate)
                 },
                 {
                     property: '_TypeHierarchy',
@@ -397,13 +386,13 @@
         },
 
         refresh: function () {
-            var app = Rally.getApp();
-			app.rawData = {};
-            app._getChartData();
+            setTimeout(function()  {
+                Rally.getApp()._getChartData(true);
+                Rally.getApp()._getChartData(false);
+            }, 500);
         },
 
         launch: function () {
-
             this.startDate = Rally.util.DateTime.add(this._getSunday(new Date()), "day", (0 - parseInt(this.getSetting('Number of Weeks'))) * 7);
             this.endDate = this._getSunday(new Date());
 
@@ -421,22 +410,37 @@
             this.add(button);            
 
             this.panel = new Ext.Panel({
-                    title: 'Team Scorecard',
+                    title: 'Team Cycle Time Scorecard',
                     header: {
 	                    titleAlign: 'center'
+                    },
+                    layout: {
+                        type: 'hbox',
+                        pack: 'start',
+                        align: 'stretch'
                     },
                     items: [
                         {
                             xtype: "panel",
-                            html: new Ext.XTemplate("<a href='#'>{value}").apply(
+                            flex: 1,
+                            html: new Ext.XTemplate("{value}").apply(
                                 {
-                                    value: '2. HTML property of a panel generated by an XTemplate'
+                                    value: 'Loading Baseline...'
+                                })
+                        },
+                        {
+                            xtype: "panel",
+                            flex: 1,
+                            html: new Ext.XTemplate("{value}").apply(
+                                {
+                                    value: 'Loading Current...'
                                 })
                         }
                     ]
                 });
 
             this.add(this.panel);
+            this.refresh();
         }
     });
 
