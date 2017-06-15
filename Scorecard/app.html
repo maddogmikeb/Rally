@@ -222,7 +222,7 @@
             var to = this._dateToYMD2(isBaseline ? this.getSetting('Baseline End Date'): this.endDate);
 
             if (this.panel.items.length > 0) {
-                this.panel.items.items[0].update(new Ext.XTemplate('<b>{type}</b> ({from} to {to}):<div class="currentValue">Average: {average} {trend}</div>').apply(
+                this.panel.items.items[isBaseline ? 0 : 1].update(new Ext.XTemplate('<b>{type}</b> ({from} to {to}):<div class="currentValue">Average: {average} {trend}</div>').apply(
                             {
                                 type: isBaseline ? 'Baseline' : 'Current',
                                 from: from, 
@@ -251,10 +251,13 @@
                 if (this.baseline != null && this.current != null) {
                     var variance = (this.current.average / this.baseline.average) * 100;                
                     if (variance < 98) {
+                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.lime);
                         this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.lime);
                     } else if (variance > 104) {
+                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.red_med);
                         this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.red_med);
                     } else {
+                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.yellow);
                         this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.yellow);
                     }
                 }
