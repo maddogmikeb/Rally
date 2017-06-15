@@ -104,12 +104,9 @@
             if (!success) {
                 debugger;
                 if (this.panel.items.length > 0) {
-                    if (isBaseline) {
-                        this.panel.items.items[0].update(new Ext.XTemplate('{type} Failed.').apply({ type: 'Baseline' }));
-                    } else {
-                        this.panel.items.items[1].update(new Ext.XTemplate('{type} Failed.').apply({ type: 'Current' }));
-                    }
+                    this.panel.items.items[isBaseline ? 0 : 1].update(new Ext.XTemplate('{type} Failed.').apply({ type: isBaseline ? 'Baseline' : 'Current' }));
                 }
+                this._hideMask();
                 return;
             }
 
@@ -225,15 +222,17 @@
             var to = this._dateToYMD2(isBaseline ? this.getSetting('Baseline End Date'): this.endDate);
 
             if (this.panel.items.length > 0) {
+                this.panel.items.items[0].update(new Ext.XTemplate('<b>{type}</b> ({from} to {to}):<div class="currentValue">Average: {average} {trend}</div>').apply(
+                            {
+                                type: isBaseline ? 'Baseline' : 'Current',
+                                from: from, 
+                                to: to, 
+                                average: averageFormat, 
+                                trend: trendFormat
+                            }));
+
                 if (isBaseline) 
                 {
-                    this.panel.items.items[0].update(new Ext.XTemplate('Baseline ({from} to {to}):<div class="currentValue">Average: {average} {trend}</div>').apply(
-                                {
-                                    from: from, 
-                                    to: to, 
-                                    average: averageFormat, 
-                                    trend: trendFormat
-                                }));
                     this.baseline = {
                                     from: from, 
                                     to: to, 
@@ -241,13 +240,6 @@
                                     trend: trendFormat
                                 };
                 } else {
-                    this.panel.items.items[1].update(new Ext.XTemplate('Current ({from} to {to}):<div class="currentValue">Average: {average} {trend}</div>').apply(
-                                {
-                                    from: from, 
-                                    to: to, 
-                                    average: averageFormat, 
-                                    trend: trendFormat
-                                }));
                     this.current = {
                                     from: from, 
                                     to: to, 
@@ -257,7 +249,7 @@
                 }
 
                 if (this.baseline != null && this.current != null) {
-                    var variance = (this.baseline.average / this.current.average) * 100;                
+                    var variance = (this.current.average / this.baseline.average) * 100;                
                     if (variance < 98) {
                         this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.lime);
                     } else if (variance > 104) {
@@ -267,6 +259,8 @@
                     }
                 }
             }
+
+            this._hideMask();
         },
 
         _getChartData: function (isBaseline) {
@@ -341,6 +335,19 @@
             };
         },
 
+		_showMask: function (msg) {
+			if (this.getEl()) {
+				this.getEl().unmask();
+				this.getEl().mask(msg);
+			}
+		},
+
+		_hideMask: function () {
+            if (this.getEl()) {
+			    this.getEl().unmask();
+            }
+		},
+
         refresh: function () {
             var that = Rally.getApp();
             that.current = null; 
@@ -358,6 +365,8 @@
         launch: function () {
             this.startDate = Rally.util.DateTime.add(this._getSunday(new Date()), "day", (0 - parseInt(this.getSetting('Number of Weeks'))) * 7);
             this.endDate = this._getSunday(new Date());
+
+            this._showMask("Loading...");
 
             this.panel = new Ext.Panel({
                     frame: false,
@@ -396,7 +405,7 @@
             this.add(new Ext.Panel({
                     frame: false,
                     border:0,
-                    html: '<div style="width: 100%; text-align: center">A trend down is generally better.</div>'
+                    html: '<div style="width: 100%; text-align: center">A trend down is generally better. Kaizen towards green.</div>'
                 }));
 
             this.refresh();
