@@ -1,0 +1,363 @@
+<meta name="Name" content="App: ThroughputScoreCard" />
+<meta name="Version" content="2017.06.16" />
+<meta name="Vendor" content="maddogmikeb" />
+
+<style>
+    .currentValue {
+        width: 100%; 
+        text-align: center; 
+        font-size: x-large;
+        font-weight: bold;
+    }
+
+</style>
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+<script>
+    function LineFitter() {
+        this.count = 0;
+        this.sumX = 0;
+        this.sumX2 = 0;
+        this.sumXY = 0;
+        this.sumY = 0;
+    }
+    LineFitter.prototype = {
+        'add': function (x, y) {
+            this.count++;
+            this.sumX += x;
+            this.sumX2 += x * x;
+            this.sumXY += x * y;
+            this.sumY += y;
+        },
+        'project': function (x) {
+            var det = this.count * this.sumX2 - this.sumX * this.sumX;
+            var offset = (this.sumX2 * this.sumY - this.sumX * this.sumXY) / det;
+            var scale = (this.count * this.sumXY - this.sumX * this.sumY) / det;
+            return offset + x * scale;
+        }
+    };
+</script>
+<script>
+    Ext.define('WorkSizeThroughput', {
+        extend: 'Rally.app.App',
+        componentCls: 'app',
+        settingsScope: 'app',
+        startDate: null,
+        endDate: null,
+        rawData: null,
+        panel: null, 
+
+        config: {
+            defaultSettings: {
+                'Number of Weeks': 12,
+                'Start Day Of Week' : 0
+            },
+        },
+
+        getSettingsFields: function() {
+            return [{
+                    name: 'Number of Weeks',
+                    xtype: 'rallynumberfield',
+                    value: this.getSetting('Number of Weeks')
+                },{
+                    name: 'Start Day Of Week',
+                    xtype: 'rallynumberfield',
+                    value: this.getSetting('Start Day Of Week')
+                }];
+        },
+
+        _getContext: function () {
+            return {
+                workspace: this.getContext().getWorkspaceRef(),
+                project: this.getContext().getProjectRef(),
+                projectScopeUp: this.getContext().getProjectScopeUp(),
+                projectScopeDown: this.getContext().getProjectScopeDown()
+            };
+        },
+
+        _isNumeric: function (n) {
+            return !isNaN(parseFloat(n)) && isFinite(n);
+        },
+
+        _getStartDayOfWeek: function (d) {
+            var date = new Date(d);
+            var day = date.getDay() || 7;
+            var startDay = parseInt(this.getSetting('Start Day Of Week')) % 7;
+            if (day !== (startDay + 1))
+                date.setHours(-24 * (day - startDay - 1));
+            date.setHours(-24);
+            date.setHours(0, 0, 0, 0); // set to midnight
+            return date;
+        },
+
+        _dateToYMD: function (date) {
+            var d = date.getDate(), m = date.getMonth() + 1, y = date.getFullYear();
+            return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m);
+        },
+
+        _dateToYMD2: function (date) {
+            var d = date.getDate(), m = date.getMonth() + 1, y = date.getFullYear();
+            return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m) + '/' + y;
+        },
+
+        _getSeriesForItem: function (item) {
+            var est = item.PlanEstimate;
+            return this._getSeriesForEstimate(est);
+        },
+
+        _getSeriesNames: function () {
+            return ["None", "X-Small", "Small", "Medium", "Large", "X-Large"];
+        },
+
+        _getKeyFromRecord: function (record) {
+            var d = new Date(record.AcceptedDate);
+            return this._getKeyFromDate(d);
+        },
+
+        _getKeyFromDate: function (theDate) {
+            return this._dateToYMD(this._getStartDayOfWeek(theDate));
+        },
+
+        _getSeriesForEstimate: function (est) {
+            var series = this._getSeriesNames();
+            if (!this._isNumeric(est)) return series[0];
+            if (est <= 0) return series[0];
+            if (est <= 3) return series[1];
+            if (est <= 5) return series[2];
+            if (est <= 11) return series[3];
+            if (est <= 19) return series[4];
+            return series[5];
+        },       
+
+        _getDateCategories: function () {
+            var currentNumWeeks = parseInt(this.getSetting('Number of Weeks'));
+            var categories = [];
+            var date = new Date(this.startDate);
+            for (var idx = 0; idx < currentNumWeeks; idx++) {
+                categories.push(this._dateToYMD(date));
+                date = Rally.util.DateTime.add(date, "day", 7);
+            }
+            return categories;
+        },
+
+        _loadData: function (store, records, success) {
+            console.log("Loading data for WorkSizeThroughput app (" + success + ")");
+
+            if (!success) {
+                debugger;
+                if (this.panel.items.length > 0) {
+                    this.panel.items.items[isBaseline ? 0 : 1].update(new Ext.XTemplate('{type} Failed.').apply({ type: isBaseline ? 'Baseline' : 'Current' }));
+                }
+                this._hideMask();
+                return;
+            }
+
+            this.rawData = records;
+            var currentNumWeeks = parseInt(this.getSetting('Number of Weeks'));
+            var categories = this._getDateCategories();
+            var series = [];
+            Ext.each(this._getSeriesNames(), function (name) {
+                series.push({
+                    name: name,
+                    data: Array.apply(null, Array(currentNumWeeks)).map(Number.prototype.valueOf, 0)
+                });
+            });
+            Ext.each(records, function (record) {
+                var item = record.data;
+                var seriesName = this._getSeriesForItem(item);
+                var key = this._getKeyFromRecord(item);
+                var seriesBucket = null;
+                Ext.each(series, function (s) {
+                    if (s.name === seriesName) {
+                        seriesBucket = s;
+                    }
+                });
+                if (seriesBucket) {
+                    seriesBucket.data[categories.indexOf(key)] += 1;
+                }
+            }, this);
+            var totalSum = 0;
+            var fitter = new LineFitter();
+            for (var i = 0; i < currentNumWeeks; i++) {
+                var weeklySum = 0;
+                Ext.each(series, function (s) {
+                    weeklySum += s.data[i];
+                });
+                totalSum += weeklySum;
+                fitter.add(i, weeklySum);
+            }
+            var average = totalSum / currentNumWeeks;
+            var averages = [];
+            var trend = [];
+            for (var i = 0; i < currentNumWeeks; i++) {
+                averages.push(average);
+                trend.push(fitter.project(i));
+            }
+            this._updateChart(series, averages, trend, false);
+        },
+
+        _updateChart: function (data, averages, trend, isBaseline) {
+            if (this.panel.items.length > 0) {
+                this.panel.items.items[isBaseline ? 0 : 1].update(new Ext.XTemplate('<b>{type}</b> ({from} to {to}):<div class="currentValue">Average: {average} {trend}</div>').apply(
+                            {
+                                type: isBaseline ? 'Baseline' : 'Current',
+                                //from: from, 
+                                //to: to, 
+                                average: averageFormat, 
+                                trend: trendFormat
+                            }));
+
+                if (isBaseline) 
+                {
+                    this.baseline = {
+                                    //from: from, 
+                                    //to: to, 
+                                    average: averageFormat, 
+                                    trend: trendFormat
+                                };
+                } else {
+                    this.current = {
+                                    //from: from, 
+                                    //to: to, 
+                                    average: averageFormat, 
+                                    trend: trendFormat
+                                }; 
+                }
+
+                if (this.baseline != null && this.current != null) {
+                    var variance = (this.current.average / this.baseline.average) * 100;                
+                    if (variance < 98) {
+                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.lime);
+                        this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.lime);
+                    } else if (variance > 104) {
+                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.red_med);
+                        this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.red_med);
+                    } else {
+                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.yellow);
+                        this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.yellow);
+                    }
+
+                    this._hideMask();
+                }                
+            }            
+        },
+
+        _getFilters: function () {
+            return [
+                {
+                    property: 'ScheduleState',
+                    value: 'Accepted'
+                },
+                {
+                    property: 'AcceptedDate',
+                    operator: '>=',
+                    value: Rally.util.DateTime.format(this.startDate, 'yyyy-MM-dd')
+                },
+                {
+                    property: 'AcceptedDate',
+                    operator: '<',
+                    value: Rally.util.DateTime.format(this.endDate, 'yyyy-MM-dd')
+                }
+            ];
+        },
+
+        _getSorter: function () {
+            return [
+                {
+                    property: 'AcceptedDate',
+                    direction: 'ASC'
+                }
+            ];
+        },
+
+        _getChartData: function () {
+            Ext.create('Rally.data.wsapi.Store', {
+                model: 'userstory',
+                autoLoad: true,
+                limit: 'Infinity',
+                context: this._getContext(),
+                scope: this,
+                listeners: {
+                    load: this._loadData,
+                    scope: this
+                },
+                fetch: ['Parent', 'AcceptedDate', 'PlanEstimate', 'Project', 'Name', 'FormattedID'],
+                filters: this._getFilters(),
+                sorters: this._getSorter()
+            });           
+        },
+
+        refresh: function () {
+            var app = Rally.getApp();
+            app._getChartData();
+        },
+
+		_showMask: function (msg) {
+			if (this.getEl()) {
+				this.getEl().unmask();
+				this.getEl().mask(msg);
+			}
+		},
+
+		_hideMask: function () {
+            if (this.getEl()) {
+			    this.getEl().unmask();
+            }
+		},
+
+        launch: function () {
+            this.startDate = Rally.util.DateTime.add(this._getStartDayOfWeek(new Date()), "day", (0 - parseInt(this.getSetting('Number of Weeks'))) * 7);
+            this.endDate = this._getStartDayOfWeek(new Date());
+
+            this._showMask("Loading...");
+
+            this.panel = new Ext.Panel({
+                    frame: false,
+                    border:0,
+                    layout: {
+                        type: 'hbox',
+                        pack: 'start',
+                        align: 'stretch'
+                    },
+                    items: [
+                        {
+                            xtype: "panel",
+                            flex: 1,
+                            frame: false,
+                            border:0,
+                            html: new Ext.XTemplate('<div style="width: 100%; text-align: center">{value}</div>').apply(
+                                {
+                                    value: 'Loading Baseline...'
+                                })
+                        },
+                        {
+                            xtype: "panel",
+                            flex: 1,
+                            frame: false,
+                            border:0,
+                            html: new Ext.XTemplate('<div style="width: 100%; text-align: center">{value}</div>').apply(
+                                {
+                                    value: 'Loading Current...'
+                                })
+                        }
+                    ]
+                });
+
+            this.add(this.panel);
+
+            this.add(new Ext.Panel({
+                    frame: false,
+                    border:0,
+                    html: '<div style="width: 100%; text-align: center">A trend down is generally better. Kaizen towards green.</div>'
+                }));
+
+            this.refresh();
+        }        
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('WorkSizeThroughput', {
+            name: 'Work Size Throughput'
+        });
+    });
+
+</script>
