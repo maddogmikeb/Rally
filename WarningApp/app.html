@@ -8,21 +8,277 @@
 
     var Ext = window.Ext4 || window.Ext;
 
+ /**
+     * @private
+     * Displays a single notification.
+     */
+    Ext.define('Rally.ui.notify.Notification', {
+        extend: 'Ext.Component',
+        requires: [
+            'Ext.DomHelper',
+            'Ext.fx.Anim',
+            'Ext.XTemplate',
+            'Rally.util.String'
+        ],
+        alias: 'widget.rallynotification',
+        componentCls: 'rui-notification',
+
+        mixins: {
+            clientMetrics: 'Rally.clientmetrics.ClientMetricsRecordable'
+        },
+
+        statics: {
+            statusCls: 'status',
+            confirmCls: 'confirm',
+            warningCls: 'rly-warning',
+            errorCls: 'error',
+
+            templates: {},
+
+            getTemplatedMessage: function(config) {
+                var message = config.message || '';
+                if (config.allowHTML !== true) {
+                    message = Rally.util.String.stripHTML(config.message);
+                }
+                if (config.model){
+                    if (!this.templates.hasOwnProperty(message)){
+                        this.templates[message] = Ext.create('Ext.XTemplate', message);
+                    }
+
+                    message = this.templates[message].apply(config.model);
+                }
+                return message;
+            }
+        },
+
+        renderTpl: [
+            '<div class="rui-notification-body">',
+            '  <tpl if="closable">',
+            '    <div class="rui-notification-close-btn"><div class="icon-cancel"></div></div>',
+            '  </tpl>',
+            '  <div class="rui-notification-message">{message}</div>',
+            '</div>'
+        ],
+
+        renderSelectors: {
+            closeBtnEl: '.rui-notification-close-btn',
+            messageEl: '.rui-notification-message'
+        },
+
+        message: '',
+        closable: true,
+        duration: 10000,
+        showDuration: 500,
+        hideDuration: 250,
+        showForever: false,
+        animateShowHide: true,
+        allowHTML: false,
+        links: [],
+
+        constructor: function(config) {
+            this.callParent(arguments);
+            debugger;
+
+            if (this.showForever) {
+                this.duration = 0;
+            }
+        },
+
+        initComponent: function() {
+            debugger;
+            this.callParent(arguments);
+
+            this.renderData = Ext.merge(this.renderData, {
+                message: this.self.getTemplatedMessage(this),
+                closable: this.closable
+            });
+            this.on('render', this._onRender, this);
+        },
+
+        destroy: function() {
+            if (this.showAnimation) {
+                this.showAnimation.callback = function() {
+                    delete this.showAnimation;
+                    this.destroy();
+                };
+                this.showAnimation.end();
+                return;
+            }
+
+            if (this.hideAnimation) {
+                this.hideAnimation.callback = function() {
+                    delete this.hideAnimation;
+                    this.self.superclass.destroy.call(this);
+                };
+                this.hideAnimation.end();
+                return;
+            }
+
+            if (this.animateShowHide) {
+                this._hide();
+                return;
+            }
+
+            this.callParent(arguments);
+        },
+
+        _onRender: function() {
+            debugger;
+            this._initCloseButton();
+            this._attachLinks();
+            if (this.duration > 0) {
+                 setTimeout(Ext.bind(this.destroy, this), this.duration);
+            }
+            this._show();
+        },
+
+        _show: function() {
+            debugger;
+            var el = this.getEl();
+
+            if (this.animateShowHide) {
+                el.setOpacity(0);
+                el.setStyle('visibility', 'visible');
+                this.showAnimation = Ext.create('Ext.fx.Anim', {
+                    target: this,
+                    duration: this.showDuration,
+                    to: {
+                        opacity: 1
+                    },
+                    callback: function() {
+                        delete this.showAnimation;
+                    },
+                    scope: this
+                });
+                this._forceShow();
+            } else {
+                this._makeVisible();
+            }
+        },
+
+        _hide: function() {
+            this.hideAnimation = Ext.create('Ext.fx.Anim', {
+                target: this,
+                duration: this.hideDuration,
+                to: {
+                    opacity: 0
+                },
+                callback: function() {
+                    delete this.hideAnimation;
+                    this.self.superclass.destroy.call(this);
+                },
+                scope: this
+            });
+        },
+
+        _forceShow: function() {
+            // When multiple animations are running, they sometimes conflict.
+            // Force the element to become visible if animation has not completed
+            setTimeout(Ext.bind(function() {
+                if (this.showAnimation && this.showAnimation.running) {
+                    this.showAnimation.end();
+                    this._makeVisible();
+                }
+            }, this), this.showDuration + 1);
+        },
+
+        _makeVisible: function() {
+            var el = this.getEl();
+            el.setOpacity(1);
+            el.setStyle('visibility', 'visible');
+        },
+
+        _attachLinks: function() {
+            if (Ext.isEmpty(this.links)) {
+                return;
+            }
+
+            Ext.each(this.links, function(link) {
+                this._createLink(this.messageEl, link);
+            }, this);
+        },
+
+        _createLink: function(el, link) {
+            var linkEl = Ext.DomHelper.append(el, {
+                tag: 'a',
+                html: '<span>' + Rally.util.String.stripHTML(link.text) + '</span>'
+            }, true);
+
+            linkEl.dom.href = link.href || '#';
+
+            if (link.fn) {
+                this.mon(linkEl, 'click', function() {
+                    this.recordAction({description: 'clicked notification link', miscData: {linkText: link.text}});
+                    Ext.callback(link.fn, link.scope || this, link.args || []);
+                    this._hide();
+                }, this, {stopEvent: true});
+            }
+        },
+
+        _initCloseButton: function() {
+            this._addCloseBtnListeners(this.closeBtnEl);
+        },
+
+        _addCloseBtnListeners: function(btnEl) {
+            var hoverCls = 'hover';
+            if (btnEl) {
+                btnEl.hover(
+                    function() {btnEl.addCls(hoverCls);},
+                    function() {btnEl.removeCls(hoverCls);}
+                );
+                btnEl.on('click', function() {
+                    this.recordAction({description: 'closed notification'});
+                    this.destroy();
+                }, this);
+            }
+        }
+    });
+
     Ext.define('WarningApp', {
         extend: 'Rally.app.App',
+        requires: ['widget.rallynotification'],
+        
+        config: {
+            defaultSettings: {
+                'Timeout': 5,
+                'Message' : Rally.Message.displayNotification, 
+            },
+        },
 
-        timeout: 10 * 1000,
+        getSettingsFields: function() {
+            return [{
+                    name: 'Message',
+                    xtype: 'textareafield',
+                    value: this.getSetting('Message'),
+                    grow: true,
+                    anchor: '100%'
+                },{
+                    name: 'Timeout',
+                    xtype: 'rallynumberfield',
+                    value: this.getSetting('Timeout')
+                }];
+        },
 
-        _showWarning: function() { 
+        _showWarning: function() {
+            var that = Rally.getApp();
+
+            var config = {
+                message: that.getSetting("Message"),
+                timeout: that.getSetting("Timeout") * 1000,
+                cls: Rally.ui.notify.Notification.warningCls
+            };
+            Rally.ui.notify.Notifier.show(config);
+            return;
+
             Rally.ui.notify.Notifier.showWarning({
-                message: 'Please <b>do not change</b> settings on this page as it is a global page. If you wish to make adjustments please copy the page - however any updates to apps may not flow through to your new page.',
-                timeout: this.timeout
+                message: that.getSetting("Message"),
+                timeout: that.getSetting("Timeout") * 1000
             }); 
         },
 
         launch: function() {
             this.add(Ext.create('Rally.ui.Button', {
-                text: 'Show Warning',
+                text: 'Show Message',
                 handler: this._showWarning,
                 style: {
                     position: 'absolute',
@@ -31,7 +287,9 @@
                     'z-index': 199
                 }
             }));
-            this._showWarning();
+            setTimeout(function() {
+                Rally.getApp()._showWarning();
+            }, 1000);
         }
     });
 
