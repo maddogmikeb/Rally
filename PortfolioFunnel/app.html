@@ -101,11 +101,11 @@
                 return;
             }
             if (isLoading) {
-                button.handler = function () { };
-                button.setText("Loading...");
-            } else {
-                button.handler = Rally.getApp()._buttonClick;
-                button.setText("Information");
+                Rally.getApp()._showMask("Loading...");
+                button.hide(true);
+            } else {                
+                button.show(true);
+                Rally.getApp()._hideMask();
             }
         },
 
