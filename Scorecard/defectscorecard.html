@@ -1,4 +1,4 @@
-<meta name="Name" content="App: ThroughputScoreCard" />
+<meta name="Name" content="App: DefectScoreCard" />
 <meta name="Version" content="2017.06.16" />
 <meta name="Vendor" content="maddogmikeb" />
 
@@ -13,31 +13,7 @@
 </style>
 <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
 <script>
-    function LineFitter() {
-        this.count = 0;
-        this.sumX = 0;
-        this.sumX2 = 0;
-        this.sumXY = 0;
-        this.sumY = 0;
-    }
-    LineFitter.prototype = {
-        'add': function (x, y) {
-            this.count++;
-            this.sumX += x;
-            this.sumX2 += x * x;
-            this.sumXY += x * y;
-            this.sumY += y;
-        },
-        'project': function (x) {
-            var det = this.count * this.sumX2 - this.sumX * this.sumX;
-            var offset = (this.sumX2 * this.sumY - this.sumX * this.sumXY) / det;
-            var scale = (this.count * this.sumXY - this.sumX * this.sumY) / det;
-            return offset + x * scale;
-        }
-    };
-</script>
-<script>
-    Ext.define('ScorecardThroughput', {
+    Ext.define('DefectScoreCard', {
         extend: 'Rally.app.App',
         componentCls: 'app',
         settingsScope: 'app',
@@ -49,6 +25,7 @@
             defaultSettings: {
                 'Number of Weeks': 12,
                 'Start Day Of Week' : 0,
+                'Include Not Set As Defect': false,
                 'Baseline Start Date': new Date(2016, 8, 1), // Sep 16 
                 'Baseline End Date': new Date(2017, 5, 1) // June 17 
             },
@@ -63,6 +40,10 @@
                     name: 'Start Day Of Week',
                     xtype: 'rallynumberfield',
                     value: this.getSetting('Start Day Of Week')
+                },{
+                    name: 'Include Not Set As Defect',
+                    xtype: 'rallycheckboxfield', 
+                    value: this.getSetting('Include Not Set As Defect')
                 }];
         },
 
@@ -73,10 +54,6 @@
                 projectScopeUp: this.getContext().getProjectScopeUp(),
                 projectScopeDown: this.getContext().getProjectScopeDown()
             };
-        },
-
-        _isNumeric: function (n) {
-            return !isNaN(parseFloat(n)) && isFinite(n);
         },
 
         _getStartDayOfWeek: function (d) {
@@ -90,61 +67,15 @@
             return date;
         },
 
-        _dateToYMD: function (date) {
-            var d = date.getDate(), m = date.getMonth() + 1, y = date.getFullYear();
-            return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m);
-        },
-
         _dateToYMD2: function (date) {
             var d = date.getDate(), m = date.getMonth() + 1, y = date.getFullYear();
             return (d <= 9 ? '0' + d : d) + '/' + (m <= 9 ? '0' + m : m) + '/' + y;
         },
 
-        _getSeriesForItem: function (item) {
-            var est = item.PlanEstimate;
-            return this._getSeriesForEstimate(est);
-        },
-
-        _getSeriesNames: function () {
-            return ["None", "X-Small", "Small", "Medium", "Large", "X-Large"];
-        },
-
-        _getKeyFromRecord: function (record) {
-            var d = new Date(record.AcceptedDate);
-            return this._getKeyFromDate(d);
-        },
-
-        _getKeyFromDate: function (theDate) {
-            return this._dateToYMD(this._getStartDayOfWeek(theDate));
-        },
-
-        _getSeriesForEstimate: function (est) {
-            var series = this._getSeriesNames();
-            if (!this._isNumeric(est)) return series[0];
-            if (est <= 0) return series[0];
-            if (est <= 3) return series[1];
-            if (est <= 5) return series[2];
-            if (est <= 11) return series[3];
-            if (est <= 19) return series[4];
-            return series[5];
-        },       
-
-        _getDateCategories: function () {
-            var currentNumWeeks = parseInt(this.getSetting('Number of Weeks'));
-            var categories = [];
-            var date = new Date(this.startDate);
-            for (var idx = 0; idx < currentNumWeeks; idx++) {
-                categories.push(this._dateToYMD(date));
-                date = Rally.util.DateTime.add(date, "day", 7);
-            }
-            return categories;
-        },
-
         _loadData: function (store, records, success, isBaseline) {
-            console.log("Loading data for ScorecardThroughput app (" + success + ")");
+            console.log("Loading data for DefectScoreCard app (" + success + ")");
 
             if (!success) {
-                debugger;
                 if (this.panel.items.length > 0) {
                     this.panel.items.items[isBaseline ? 0 : 1].update(new Ext.XTemplate('{type} Failed.').apply({ type: isBaseline ? 'Baseline' : 'Current' }));
                 }
@@ -152,65 +83,43 @@
                 return;
             }
 
-            var currentNumWeeks = parseInt(this.getSetting('Number of Weeks'));
-            var categories = this._getDateCategories();
-            var series = [];
-            Ext.each(this._getSeriesNames(), function (name) {
-                series.push({
-                    name: name,
-                    data: Array.apply(null, Array(currentNumWeeks)).map(Number.prototype.valueOf, 0)
-                });
-            });
+            var defectSum = 0, unknownSum = 0;
             Ext.each(records, function (record) {
                 var item = record.data;
-                var seriesName = this._getSeriesForItem(item);
-                var key = this._getKeyFromRecord(item);
-                var seriesBucket = null;
-                Ext.each(series, function (s) {
-                    if (s.name === seriesName) {
-                        seriesBucket = s;
-                    }
-                });
-                if (seriesBucket) {
-                    seriesBucket.data[categories.indexOf(key)] += 1;
+                if (item.c_WorkType === 'Defect (Un-Done Work; Tech-Debt; Bug)') {
+                    defectSum += 1;
+                } else if (item.c_WorkType === null || item.c_WorkType === '') {
+                    unknownSum += 1;
                 }
             }, this);
 
-            var totalSum = 0;
-            var fitter = new LineFitter();
-            for (var i = 0; i < currentNumWeeks; i++) {
-                var weeklySum = 0;
-                Ext.each(series, function (s) {
-                    weeklySum += s.data[i];
-                });
-                totalSum += weeklySum;
-                fitter.add(i, weeklySum);
+            var average = 0;
+            if (this.getSetting("Include Not Set As Defect") === true) {
+                average = ((defectSum + unknownSum) / records.length) * 100;
+            } else {
+                average = (defectSum / records.length) * 100;
             }
 
-            var average = totalSum / currentNumWeeks;
-            var trend = [];
-            for (var i = 0; i < currentNumWeeks; i++) {
-                trend.push(fitter.project(i));
-            }
-
-            this._updateChart(series, average, trend, isBaseline);
+            this._updateChart(average, unknownSum, records.length, isBaseline);
         },
 
-        _updateChart: function (data, average, trend, isBaseline) {
-            var averageFormat = average ? average.toFixed(2) : '0.00';
-            var trendDirection = -1 * (trend[0] - trend[trend.length - 1]);
-            var trendFormat = trendDirection > 1 ? '&uarr;' : (trendDirection < -1  ? '&darr;' : '&harr;');
+        _updateChart: function (average, unknownSum, total, isBaseline) {
+            var averageFormat = average ? average.toFixed(0) : 0;
             var from = this._dateToYMD2(isBaseline ? this.getSetting('Baseline Start Date') : this.startDate);
             var to = this._dateToYMD2(isBaseline ? this.getSetting('Baseline End Date'): this.endDate);
 
             if (this.panel.items.length > 0) {
-                this.panel.items.items[isBaseline ? 0 : 1].update(new Ext.XTemplate('<b>{type}</b> ({from} to {to}):<div class="currentValue">Average: {average}/week {trend}</div>').apply(
+                this.panel.items.items[isBaseline ? 0 : 1].update(new Ext.XTemplate(
+                    '<b>{type}</b> ({from} to {to}):<div class="currentValue">Ratio: {average}/100</div>' 
+                    + (this.getSetting("Include Not Set As Defect") === true ? '<div style="text-align: centre; width: 100%;">{unknownSum} items out of {total} with unknown work type.</div>' : '')
+                    ).apply(
                             {
                                 type: isBaseline ? 'Baseline' : 'Current',
                                 from: from, 
                                 to: to, 
                                 average: averageFormat, 
-                                trend: trendFormat
+                                total: total,
+                                unknownSum: unknownSum
                             }));
 
                 if (isBaseline) 
@@ -218,31 +127,22 @@
                     this.baseline = {
                                     from: from, 
                                     to: to, 
-                                    average: averageFormat, 
-                                    trend: trendFormat
+                                    average: averageFormat
                                 };
                 } else {
                     this.current = {
                                     from: from, 
                                     to: to, 
-                                    average: averageFormat, 
-                                    trend: trendFormat
+                                    average: averageFormat
                                 }; 
                 }
 
                 if (this.baseline != null && this.current != null) {
-                    var variance = (this.current.average / this.baseline.average) * 100;                
-                    if (variance < 98) {
+                    var variance = (this.current.average / this.baseline.average) * 100;
+                    if (this.current.average < 1) {
                         this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.red_med);
-                        this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.red_med);
-                    } else if (variance > 104) {
-                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.lime);
-                        this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.lime);
-                    } else {
-                        this.panel.items.items[0].body.setStyle('background', Rally.util.Colors.yellow);
-                        this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.yellow);
-                    }
-
+                        this.panel.items.items[1].body.setStyle('background', Rally.util.Colors.red_med);                        
+                    } 
                     this._hideMask();
                 }                
             }            
@@ -292,7 +192,7 @@
                     },
                     scope: that
                 },
-                fetch: ['Parent', 'AcceptedDate', 'PlanEstimate', 'Project', 'Name', 'FormattedID'],
+                fetch: ['Parent', 'CreationDate', 'AcceptedDate', 'PlanEstimate', 'Project', 'Name', 'FormattedID', 'c_WorkType'],
                 filters: that._getFilters(isBaseline),
                 sorters: that._getSorter()
             });           
@@ -368,7 +268,7 @@
             this.add(new Ext.Panel({
                     frame: false,
                     border:0,
-                    html: '<div style="width: 100%; text-align: center">A trend up is generally better. Kaizen towards green.</div>'
+                    html: '<div style="width: 100%; text-align: center; margin-top: 9px;">Defect ratio is the number of defects per 100 work items.' + (this.getSetting("Include Not Set As Defect") === true ? '</br><i>Note: If work type is not set it is counted as a defect.</i>' : '') + '</div>'
                 }));
 
             this.refresh();
@@ -376,8 +276,8 @@
     });
 
     Rally.onReady(function () {
-        Rally.launchApp('ScorecardThroughput', {
-            name: 'Throughput Score Card'
+        Rally.launchApp('DefectScoreCard', {
+            name: 'Defect Score Card'
         });
     });
 
