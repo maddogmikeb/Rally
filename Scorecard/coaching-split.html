@@ -1,0 +1,73 @@
+<meta name="Name" content="App: CoachingSplit" />
+<meta name="Version" content="2018.01.24" />
+<meta name="Vendor" content="maddogmikeb" />
+
+<style>
+    .blocker {
+        width: 100%; 
+        height: 20px; 
+        text-align: center;
+        filter: alpha(opacity=30);
+        -moz-opacity: 0.3;
+        opacity: 0.3;
+        font-weight: bold;
+        color: black;
+    }
+</style>
+<script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+<script>
+
+    Ext.define('CoachingSplit', {
+        extend: 'Rally.app.App',
+        componentCls: 'app',
+        settingsScope: 'app',
+
+        requires: [
+            'Rally.util.Colors'
+        ],
+
+        launch: function () {
+            var items = [];
+            var colors = Rally.util.Colors.DISPLAY_COLOR_PALETTE;
+            Ext.Array.each(colors, function(color) {
+                switch (color.name) {
+                    case "Green": color.tribe = "Wagering"; break;
+                    case "Pink": color.tribe = "Lotteries"; break;
+                    case "Orange": color.tribe = "Gaming"; break;
+                    case "Blue": color.tribe = "CTO"; break;
+                    case "Yellow": color.tribe = "SST"; break;
+                    case "Purple": color.tribe = "Marketing"; break;
+                    default: return;
+                }
+                items.push({
+                    xtype: "panel",
+                    flex: 1,
+                    frame: false,
+                    border:0,
+                    html: new Ext.XTemplate('<div style="text-align: center;"><div class="blocker" style="background-color: {value}">{name}</div>{tribe}</div>').apply(color)
+                });
+            });
+
+            this.panel = new Ext.Panel({
+                    frame: false,
+                    border:0,
+                    layout: {
+                        type: 'hbox',
+                        pack: 'start',
+                        align: 'stretch'
+                    },
+                    items: items
+                });
+
+            this.add(this.panel);
+        }
+
+    });
+
+    Rally.onReady(function () {
+        Rally.launchApp('CoachingSplit', {
+            name: 'Coaching Split'
+        });
+    });
+
+</script>
